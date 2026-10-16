@@ -1,0 +1,159 @@
+# Data Job Finder
+
+A Python tool that searches official job APIs for **entry-level data science, statistics and maths roles** that are either **remote and open to UK applicants** or **within about an hour's drive of home** (anywhere in the UK). It writes the results to an HTML page you can filter and a CSV file for Excel.
+
+It never scrapes websites. Every request goes to a documented public API, answers are saved and reused, and each API is called well inside its published limits, so it should not get your IP address blocked.
+
+## What you get
+
+Each run writes two files to `output/`:
+
+- **`jobs_YYYY-MM-DD.html`** opens in your browser. Each job card shows the title, employer, location, remote/hybrid/on-site, a rough distance and drive time, salary, posting date, a description (expandable to the full text), which of your CV skills it mentions, and a link to the original advert to apply. Jobs first seen today are marked **New**, and you can filter by keyword, new jobs only, entry-level only, or hide teaching roles and jobs you've applied for. Click **Mark as applied** on a job once you've applied: it gets an **Applied** badge, and **My applications** at the top of the page lists every job you've marked, even after it drops out of the results, with a button to download the list as a spreadsheet. Your marks are stored by the browser: Chrome and Edge keep them from one day's report to the next, but clearing your browsing data deletes them.
+- **`jobs_YYYY-MM-DD.csv`** contains the same list for Excel or pandas.
+
+Jobs are grouped into three sections:
+
+1. **Remote, open to UK applicants**: remote-only job boards, plus UK adverts that mention remote or home working.
+2. **Within about an hour of home**: on-site, hybrid or unspecified roles within 55 km (about 34 miles) in a straight line.
+3. **Worth a quick check** (collapsed): adverts that mention remote somewhere but look hybrid or office-based further away.
+
+Within each section, entry-level roles and adverts mentioning more of your CV skills are listed first.
+
+## Sources, and how the tool stays within their rules
+
+| Source | What it adds | Key | Limits the tool keeps to |
+|---|---|---|---|
+| [Adzuna](https://developer.adzuna.com) | Adverts from most UK job sites, near home and UK-wide remote | Required: 25 free trial calls, then £8 a month | The paid plan allows 500 calls a day and 5,000 a month. The tool sends at most 80 a day, at least 3 s apart, and reuses answers for 8 h |
+| [Reed](https://www.reed.co.uk/developers/jobseeker) | Reed.co.uk adverts, near home and UK-wide remote | Free, required | No published limit. At most 100 a day, at least 3 s apart, answers reused for 8 h |
+| [Himalayas](https://himalayas.app/docs/remote-jobs-api) | Remote jobs open to UK residents, entry and mid level | None | Data refreshes daily, so answers are reused for 24 h |
+| [Remotive](https://github.com/remotive-com/remote-jobs-api) | Remote data and analytics jobs | None | Asks for at most 4 calls a day: 1 call per run, at most 4 a day |
+| [Jobicy](https://jobicy.com/jobs-rss-feed) | Remote data science jobs | None | Asks for at most one pass an hour: answers reused for 6 h |
+
+The tool also:
+
+- stops calling an API for the rest of the run the moment it answers "too many requests" (HTTP 429) or "access refused" (401/403), instead of retrying;
+- identifies itself with a clear User-Agent;
+- never writes API keys to disk or prints them;
+- uses the last saved answer if a request fails.
+
+Indeed and LinkedIn are not included. Neither offers a public job search API, and both forbid scraping.
+
+## Setup (Windows)
+
+You need Python 3.11 or newer.
+
+```powershell
+git clone https://github.com/IllyaHanslip/data-job-finder.git
+cd data-job-finder
+py -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+copy .env.example .env
+```
+
+Then open `.env` in a text editor and paste in your API keys:
+
+- **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, enough for one full run with the default settings (22 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
+- **Reed** (free): register at <https://www.reed.co.uk/developers/jobseeker> and copy the API key.
+
+Without keys the tool still runs, but it only searches the three remote job boards. The "near home" search needs Adzuna and/or Reed. Reed alone is enough, but Adzuna finds many local adverts that Reed doesn't.
+
+On macOS or Linux, use `python3 -m venv .venv`, then `.venv/bin/python` in place of `.venv\Scripts\python.exe`, and `cp` in place of `copy`.
+
+## Usage
+
+```powershell
+.venv\Scripts\python.exe find_jobs.py
+```
+
+On Windows you can also double-click `find_jobs.bat`. The report opens in Chrome when the run finishes, or in your default browser if Chrome isn't installed (see `[report]` in `config.toml`).
+
+| Option | Effect |
+|---|---|
+| `--offline` | Don't use the internet; rebuild the report from saved answers (useful after editing filters) |
+| `--no-browser` | Don't open the report automatically |
+| `--verbose` | Show every request and every saved answer used |
+| `--config PATH` | Use a different settings file (`config.local.toml` is then ignored) |
+
+A full run takes about three minutes because requests are deliberately spaced out; the window shows each site's progress and roughly how long is left. Running it again within a few hours is almost instant, because saved answers are reused instead of asking the APIs again.
+
+## Changing what it searches for
+
+Everything lives in [`config.toml`](config.toml), and no code changes are needed:
+
+- `[home]`: the place to search around, its coordinates, and the radius in km. This can be anywhere in the UK, but not outside it: Reed only lists UK jobs, and the other searches look for jobs open to UK applicants. To get a town's coordinates, right-click it in Google Maps and click the numbers at the top of the menu to copy them. To keep your own town out of anything you share (on GitHub, for example), put your `[home]` section in a file called `config.local.toml` next to `config.toml` instead: it's listed in `.gitignore`, so it's never uploaded, and anything in it replaces the same setting in `config.toml`.
+- `[search]`: the phrases searched near home and UK-wide, the maximum advert age, and whether to include senior roles.
+- `[filters]`: the words a job title must contain, words that rule a job out, words marking senior or entry-level roles, and the CV skills to look for in adverts. A trailing `*` matches any ending (`statistic*` matches statistician and statistical).
+- `[sources]`: turn any site on or off.
+- `[report]`: which browser opens the report: Chrome, or your computer's default browser.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[config.toml + .env] --> B[Sources build their API requests]
+    B --> C[PoliteClient: saved answers, spacing, daily limits]
+    C --> D[Answers parsed into Job records]
+    D --> E[Filters: topic, seniority, age, open to UK]
+    E --> F[Duplicates merged]
+    F --> G[Labels: remote/hybrid, distance, CV skills, score]
+    G --> H[HTML report + CSV]
+```
+
+1. **Settings** are read from `config.toml`, and API keys from `.env` (`job_finder/config.py`).
+2. **Each source** (`job_finder/sources/`) builds its list of searches. For example, Adzuna searches each phrase within 55 km of home, then UK-wide with "remote" added.
+3. **Every request goes through `PoliteClient`** (`job_finder/http_client.py`). It returns a saved answer if one is recent enough, otherwise waits its turn, checks the daily budget, sends the request and saves the answer.
+4. **Each answer is parsed** into a common `Job` record (`job_finder/models.py`), with HTML stripped from descriptions and dates and salaries normalised (`job_finder/text.py`).
+5. **Filtering** (`job_finder/filters.py`) drops adverts that are too old, remote jobs not open to the UK, titles outside data and maths, excluded job types (IT support, security, recruiters) and senior roles. The same job listed on two sites is merged.
+6. **Labelling** works out whether each job is remote, hybrid or on-site from the advert's wording. It estimates the distance from home using the job's coordinates, or a built-in list of about 4,300 UK towns and cities (`job_finder/uk_places.tsv`), places the job in a section, notes which CV skills it mentions, and scores it for ordering.
+7. **History** (`job_finder/history.py`) remembers when each job was first seen, so new ones get a badge.
+8. **Reports** are written by `job_finder/report.py`. All text from adverts is escaped, so a malicious advert can't inject code into the page, and CSV cells are protected against spreadsheet formula injection.
+
+Drive times are rough estimates: straight-line distance × 1.3 for winding roads, at about 60 km/h.
+
+### Project layout
+
+```
+find_jobs.py            entry point
+find_jobs.bat           double-click launcher for Windows
+config.toml             search settings
+config.local.toml       your own settings, such as your town (optional; never uploaded)
+.env.example            template for your API keys (copy to .env)
+job_finder/
+  cli.py                runs everything and prints the summary
+  config.py             loads config.toml and .env
+  http_client.py        caching, rate limiting and error handling for every request
+  models.py             the Job record
+  sources/              one module per job API, plus shared base class
+  filters.py            relevance, seniority, remote detection, de-duplication, ranking
+  geo.py                distances and drive-time estimates
+  uk_places.tsv         UK towns and cities used for distances (from GeoNames)
+  text.py               HTML-to-text, dates, salaries
+  history.py            remembers which jobs you've already seen
+  report.py             HTML and CSV output
+  storage.py            safe JSON file writing
+tests/                  pytest suite with canned API answers (no network)
+tools/                  build_uk_places.py rebuilds uk_places.tsv from GeoNames data
+```
+
+## Running the tests
+
+```powershell
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m ruff check .
+```
+
+The tests use canned API answers, so they never touch the network.
+
+## Notes
+
+- Keyword matching is simple and transparent rather than clever. Read each advert before applying.
+- Remotive delays its listings by 24 hours, and Himalayas updates once a day.
+- Job data belongs to the sites above. Each listing links to the site it came from, and any other site it was also found on is named and linked, as the Himalayas, Remotive and Jobicy rules ask.
+
+## Terms and licence
+
+- This is a personal tool for your own job search. It uses each site's official API (with your own keys for Adzuna and Reed), so each site's terms apply to you: [Adzuna](https://developer.adzuna.com/docs/terms_of_service), [Himalayas](https://himalayas.app/docs/remote-jobs-api), [Remotive](https://github.com/remotive-com/remote-jobs-api), [Jobicy](https://jobicy.com/jobs-rss-feed) and [Reed](https://www.reed.co.uk/policies).
+- Keep the generated reports to yourself and don't pass the listings on to other job sites: Himalayas and Remotive forbid passing their jobs on, and Adzuna has separate rules for publishing its adverts.
+- Not affiliated with, or endorsed by, Adzuna, Reed, Himalayas, Remotive or Jobicy.
+- The code is released under the [MIT licence](LICENSE). The town list (`job_finder/uk_places.tsv`) is made from [GeoNames](https://www.geonames.org) data and stays under the [CC BY 4.0 licence](https://creativecommons.org/licenses/by/4.0/).

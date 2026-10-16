@@ -1,0 +1,116 @@
+# Settings for the job finder. Edit this file to change what it looks for; no code
+# changes are needed. Keyword lists are case-insensitive and match whole words. A
+# trailing * matches any ending, so "statistic*" matches statistician, statistics and
+# statistical, and a space also matches a hyphen ("entry level" = "entry-level").
+
+[home]
+# Centre of the "near home" search on Adzuna and Reed. It can be any UK town: to get its
+# coordinates, right-click it in Google Maps and click the numbers at the top of the menu.
+# To keep your own town out of anything you share, put this section in config.local.toml
+# instead: that file is never uploaded (see README.md).
+name = "Birmingham"
+latitude = 52.4862
+longitude = -1.8904
+# Straight-line search radius in km. 55 km (about 34 miles) is roughly a one-hour drive:
+# from Birmingham it takes in Coventry, Wolverhampton, Worcester and Stafford.
+radius_km = 55
+
+[search]
+# Ignore adverts older than this many days.
+max_days_old = 30
+# Senior, lead, principal and manager roles are left out unless this is true.
+include_senior_roles = false
+
+# Searched near home on Adzuna and Reed (one request per phrase per site).
+local_terms = [
+    "data scientist",
+    "data analyst",
+    "data science",
+    "machine learning",
+    "statistician",
+    "statistics",
+    "mathematics",
+    "actuarial",
+    "graduate analyst",
+    "insight analyst",
+    "business intelligence",
+    "python",
+    "forecasting",
+    "knowledge transfer partnership",
+]
+
+# Searched across the whole UK with "remote" added (Adzuna and Reed), and on Himalayas
+# for remote jobs open to UK residents. Remotive and Jobicy are read by category instead.
+remote_terms = [
+    "data scientist",
+    "data analyst",
+    "machine learning",
+    "statistician",
+    "mathematics",
+    "actuarial",
+    "quantitative analyst",
+    "graduate data",
+]
+
+[filters]
+# A job is kept only if its title contains at least one of these...
+title_keywords = [
+    "data scien*", "data analy*", "data engineer*", "analyst", "analytics",
+    "machine learning", "deep learning", "ml", "ai", "artificial intelligence",
+    "statistic*", "biostatistic*", "mathemat*", "maths", "math", "quant", "quantitative",
+    "actuar*", "operational research", "operations research", "econometric*",
+    "insight*", "forecast*", "modeller", "modelling", "modeler", "modeling",
+    "business intelligence", "bi", "ktp", "knowledge transfer", "research scientist",
+]
+
+# ...and none of these (e.g. "Security Analyst", "Data Science Recruitment Consultant").
+exclude_title_keywords = [
+    "security", "cyber", "soc", "penetration", "threat",
+    "service desk", "help desk", "helpdesk", "desktop", "network", "infrastructure",
+    "support analyst", "application support", "technical support", "it support",
+    "test analyst", "qa", "quality assurance", "payroll", "bim", "cad", "revit",
+    "recruit*", "account executive", "business development", "telesales", "data entry",
+]
+
+# Titles containing these count as senior (see include_senior_roles above).
+senior_keywords = [
+    "senior", "snr", "sr", "lead", "principal", "head", "director", "vp",
+    "vice president", "chief", "staff", "manager", "architect",
+]
+
+# Titles containing these get an "Entry level" badge and rank higher.
+entry_level_keywords = [
+    "graduate", "grad", "junior", "jnr", "jr", "entry level", "trainee", "intern",
+    "internship", "placement", "apprentice*", "assistant", "associate", "early career*",
+    "new grad",
+]
+
+# Skills from your CV. Each one found in an advert is listed on the job card and
+# raises its ranking.
+cv_skills = [
+    "python", "pandas", "numpy", "scikit-learn", "sklearn", "statsmodels", "tensorflow",
+    "keras", "matplotlib", "jupyter", "machine learning", "deep learning", "statistic*",
+    "probability", "time series", "forecast*", "anomaly detection", "outlier*",
+    "feature engineering", "data cleaning", "data visuali*", "hypothesis test*",
+    "regression", "arima", "linear algebra", "calculus", "differential equations",
+    "optimisation", "optimization", "financial mathematics", "mathemat*", "maths",
+    "excel", "latex", "github", "git", "msc", "masters", "master's", "2:1",
+]
+
+[sources]
+# Set any of these to false to stop using that site.
+adzuna = true
+reed = true
+himalayas = true
+remotive = true
+jobicy = true
+
+[report]
+# Browser that opens the report when a run finishes: "chrome", or "default" for your
+# computer's default browser. If Chrome isn't installed, the default browser is used.
+browser = "chrome"
+
+[network]
+# Sent with every request so API owners can see who is calling. If you rename the
+# repository, update the link.
+user_agent = "data-job-finder/1.0 (personal job search; +https://github.com/IllyaHanslip/data-job-finder)"
