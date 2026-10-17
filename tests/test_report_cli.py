@@ -14,9 +14,9 @@ import pytest
 
 from job_finder import cli, config
 from job_finder.config import DEFAULT_CONFIG_PATH, ConfigError, load_settings
-from job_finder.filters import FilterSummary, job_key
+from job_finder.filters import TAG_NEEDS_EXPERIENCE, FilterSummary, job_key
 from job_finder.http_client import PoliteClient, Politeness
-from job_finder.models import SCOPE_LOCAL, SECTION_LOCAL, Job
+from job_finder.models import SCOPE_LOCAL, SECTION_LOCAL, VERDICT_NEEDS_EXPERIENCE, Job
 from job_finder.report import _write_with_fallback, write_reports
 from job_finder.sources.base import JobSource, SourceResult
 
@@ -94,6 +94,28 @@ def test_cards_carry_what_the_applied_button_needs(settings):
     assert 'data-title="Data &quot;Quant&quot; Analyst"' in page
     assert 'data-company="Hub &amp; Co Ltd"' in page
     assert 'data-url="https://www.reed.co.uk/jobs/7"' in page
+    assert 'id="filter-experienced"' not in page  # only shown when Claude's check ran
+
+
+def test_card_shows_claudes_check(settings):
+    job = sample_job(claude_verdict=VERDICT_NEEDS_EXPERIENCE, claude_years=2,
+                     claude_evidence="Minimum 2 years <b>SQL</b>", tags=[TAG_NEEDS_EXPERIENCE])
+    html_path, csv_path = write_reports([job], [], FilterSummary(), settings, NOW,
+                                        "1 new advert checked")
+    page = html_path.read_text(encoding="utf-8")
+    assert "Claude&#x27;s check: needs experience (asks for 2+ years)" in page
+    assert "&lt;b&gt;SQL&lt;/b&gt;" in page and "<b>SQL</b>" not in page
+    assert 'data-needs-exp="1"' in page and 'id="filter-experienced"' in page
+    assert "Claude's entry-level check: 1 new advert checked" in page
+    with csv_path.open(encoding="utf-8-sig", newline="") as handle:
+        row = next(csv.DictReader(handle))
+    assert (row["Claude verdict"], row["Experience asked (years)"]) == ("needs experience", "2")
+
+
+def test_claude_check_reports_a_missing_key(settings):
+    turned_on = dataclasses.replace(settings, check_entry_level=True)
+    outcome = cli.run(turned_on, offline_client(turned_on), [FakeSource], NOW)
+    assert outcome.claude_status.startswith("skipped: add ANTHROPIC_API_KEY")
 
 
 def test_card_links_every_site_a_job_was_found_on(settings):
@@ -256,6 +278,17 @@ def test_browser_setting_is_read_and_checked(tmp_path):
     assert load_settings(path).browser == "default"  # optional: older files still work
     path.write_text(text.replace('browser = "chrome"', 'browser = "netscape"'), encoding="utf-8")
     with pytest.raises(ConfigError, match='browser in config.toml should be "chrome" or'):
+        load_settings(path)
+
+
+def test_claude_settings_are_optional_and_checked(tmp_path):
+    text = DEFAULT_CONFIG_PATH.read_text(encoding="utf-8")
+    path = tmp_path / "config.toml"
+    path.write_text(text[:text.index("[claude]")] + text[text.index("[network]"):],
+                    encoding="utf-8")
+    assert load_settings(path).check_entry_level is False  # older files keep the check off
+    path.write_text(text.replace('effort = "low"', 'effort = "extreme"'), encoding="utf-8")
+    with pytest.raises(ConfigError, match="effort in config.toml should be"):
         load_settings(path)
 
 

@@ -13,6 +13,7 @@ from job_finder.filters import (
     REASON_SENIOR,
     REASON_TOO_OLD,
     TAG_ENTRY,
+    TAG_NEEDS_EXPERIENCE,
     TAG_SENIOR,
     TAG_TEACHING,
     WORK_HYBRID,
@@ -20,6 +21,7 @@ from job_finder.filters import (
     WORK_ON_SITE,
     WORK_REMOTE,
     KeywordSet,
+    apply_claude_verdicts,
     detect_work_mode,
     open_to_uk,
     process_jobs,
@@ -31,6 +33,8 @@ from job_finder.models import (
     SECTION_CHECK,
     SECTION_LOCAL,
     SECTION_REMOTE,
+    VERDICT_ENTRY,
+    VERDICT_NEEDS_EXPERIENCE,
     Job,
 )
 
@@ -187,6 +191,21 @@ def test_a_local_job_in_a_home_town_missing_from_the_list_is_at_home(settings):
     by_title = {job.title: job for job in kept}
     assert by_title["Data Analyst"].distance_km == 0
     assert by_title["Statistician"].distance_km is None  # a UK-wide search could mean anywhere
+
+
+def test_claudes_verdict_overrules_the_title(settings):
+    junior = make_job(title="Junior Data Analyst", company="Acme")
+    plain = make_job(title="Data Analyst", company="Brook Co")
+    kept, _ = process_jobs([junior, plain], settings, TODAY)
+    by_title = {job.title: job for job in kept}
+    assert TAG_ENTRY in by_title["Junior Data Analyst"].tags  # from the title alone
+    by_title["Junior Data Analyst"].claude_verdict = VERDICT_NEEDS_EXPERIENCE
+    by_title["Data Analyst"].claude_verdict = VERDICT_ENTRY
+    apply_claude_verdicts(kept, TODAY)
+    assert TAG_ENTRY not in by_title["Junior Data Analyst"].tags
+    assert TAG_NEEDS_EXPERIENCE in by_title["Junior Data Analyst"].tags
+    assert TAG_ENTRY in by_title["Data Analyst"].tags
+    assert [job.title for job in kept] == ["Data Analyst", "Junior Data Analyst"]
 
 
 def test_entry_level_and_cv_matches_rank_higher(settings):

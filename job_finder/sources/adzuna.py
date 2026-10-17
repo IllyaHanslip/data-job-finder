@@ -96,5 +96,6 @@ class AdzunaSource(JobSource):
             contract=contract,
             latitude=to_float(item.get("latitude")),
             longitude=to_float(item.get("longitude")),
+            excerpt_only=True,  # the API only sends the first 500 characters of each advert
             scope=scope,
         )

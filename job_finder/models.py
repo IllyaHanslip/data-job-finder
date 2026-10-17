@@ -15,6 +15,11 @@ SECTION_REMOTE = "remote"
 SECTION_LOCAL = "local"
 SECTION_CHECK = "check"
 
+# Claude's answer to "is this advert really entry level?" (entry_check.py, optional).
+VERDICT_ENTRY = "entry_level"
+VERDICT_NEEDS_EXPERIENCE = "needs_experience"
+VERDICT_UNCLEAR = "unclear"
+
 
 @dataclass
 class Job:
@@ -33,6 +38,7 @@ class Job:
     scope: str = SCOPE_LOCAL
     remote_regions: str = ""  # who may apply to a remote-board job, e.g. "UK, Europe"
     level: str = ""  # seniority stated by the source, e.g. "Entry-level"
+    excerpt_only: bool = False  # the source sent only the start of the advert
 
     # Worked out by filters.enrich()
     work_mode: str = ""
@@ -45,3 +51,8 @@ class Job:
     is_new: bool = False
     also_on: list[str] = field(default_factory=list)
     also_urls: dict[str, str] = field(default_factory=dict)  # other site's name -> its own link
+
+    # Filled in by entry_check, when that optional step runs
+    claude_verdict: str = ""
+    claude_years: int | None = None
+    claude_evidence: str = ""

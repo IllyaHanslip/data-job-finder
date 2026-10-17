@@ -43,6 +43,7 @@ class JobicySource(JobSource):
         regions = plain(item.get("jobGeo"))
         # Older API versions used annualSalaryMin/Max instead of salaryMin/Max.
         period = item.get("salaryPeriod") or ("year" if "annualSalaryMin" in item else "")
+        full = html_to_text(item.get("jobDescription"))
         return Job(
             source=self.name,
             source_id=str(item.get("id") or url),
@@ -50,8 +51,8 @@ class JobicySource(JobSource):
             company=plain(item.get("companyName")),
             location=f"Remote ({regions})" if regions else "Remote",
             url=url,
-            description=html_to_text(item.get("jobDescription"))
-            or html_to_text(item.get("jobExcerpt")),
+            description=full or html_to_text(item.get("jobExcerpt")),
+            excerpt_only=not full,
             posted=parse_date(item.get("pubDate")),
             salary=format_salary(
                 _first(item, "salaryMin", "annualSalaryMin"),

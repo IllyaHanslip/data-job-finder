@@ -110,6 +110,19 @@ jobicy = true
 # computer's default browser. If Chrome isn't installed, the default browser is used.
 browser = "chrome"
 
+[claude]
+# Optional: ask Claude whether each advert is really entry level, to catch adverts that ask
+# for "2+ years" behind a junior-sounding title. It needs ANTHROPIC_API_KEY in .env and is
+# charged per advert, so it's off until you turn it on (in config.local.toml, say). Each
+# advert is checked once and the answer saved, so later runs only pay for new adverts.
+check_entry_level = false
+# claude-opus-5-5 is the default; claude-haiku-5-5 costs far less.
+model = "claude-opus-5-5"
+# How hard Claude thinks before answering: low, medium, high, xhigh or max.
+effort = "low"
+# The most new adverts one run will check, to cap what a run can cost.
+max_checks_per_run = 200
+
 [network]
 # Sent with every request so API owners can see who is calling. If you rename the
 # repository, update the link.

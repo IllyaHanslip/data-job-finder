@@ -176,6 +176,11 @@ def dig(data: Any, *keys: str) -> Any:
     return data
 
 
+def spreadsheet_safe(value: str) -> str:
+    """Stop spreadsheet programs from treating text copied from an advert as a formula."""
+    return f"'{value}" if value.startswith(("=", "+", "-", "@", "\t", "\r")) else value
+
+
 def safe_url(value: Any) -> str:
     """Return the value if it is an http(s) link, otherwise ''."""
     url = str(value or "").strip()

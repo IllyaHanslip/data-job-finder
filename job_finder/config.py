@@ -15,8 +15,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.toml"
 LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.toml"  # your own settings, never committed
 ENV_PATH = PROJECT_ROOT / ".env"
-API_KEY_NAMES = ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "REED_API_KEY")
+API_KEY_NAMES = ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "REED_API_KEY", "ANTHROPIC_API_KEY")
 BROWSERS = ("chrome", "default")
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
 class ConfigError(Exception):
@@ -48,6 +49,11 @@ class Settings:
     api_keys: dict[str, str]
     data_dir: Path  # cache, history and reports are written under this folder
     browser: str = "default"  # which browser opens the report: one of BROWSERS
+    # The optional Claude entry-level check ([claude] in config.toml)
+    check_entry_level: bool = False
+    claude_model: str = "claude-opus-5-5"
+    claude_effort: str = "low"  # one of EFFORTS
+    max_claude_checks: int = 200
 
     @property
     def cache_dir(self) -> Path:
@@ -72,6 +78,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
     sources = _section(raw, "sources")
     network = _section(raw, "network")
     report = _section(raw, "report")
+    claude = _section(raw, "claude")
 
     return Settings(
         home=Home(
@@ -95,7 +102,20 @@ def load_settings(config_path: Path | None = None) -> Settings:
         data_dir=PROJECT_ROOT,
         # Optional, so settings files written before it existed still work.
         browser=_choice(report, "report", "browser", BROWSERS, default="default"),
+        **_claude_settings(claude),
     )
+
+
+def _claude_settings(table: dict[str, Any]) -> dict[str, Any]:
+    """The optional [claude] section. Settings files without it keep the check off."""
+    if not table:
+        return {}
+    return {
+        "check_entry_level": _flag(table, "claude", "check_entry_level"),
+        "claude_model": _text(table, "claude", "model"),
+        "claude_effort": _choice(table, "claude", "effort", EFFORTS, default="low"),
+        "max_claude_checks": int(_number(table, "claude", "max_checks_per_run", 0, 5000)),
+    }
 
 
 def _read_toml(path: Path) -> dict[str, Any]:

@@ -53,6 +53,7 @@ class HimalayasSource(JobSource):
             if isinstance(seniority, list)
             else plain(seniority)
         )
+        full = html_to_text(item.get("description"))
         return Job(
             source=self.name,
             source_id=str(item.get("guid") or url),
@@ -60,7 +61,8 @@ class HimalayasSource(JobSource):
             company=plain(item.get("companyName")),
             location=f"Remote ({_short_list(regions)})",
             url=url,
-            description=html_to_text(item.get("description")) or html_to_text(item.get("excerpt")),
+            description=full or html_to_text(item.get("excerpt")),
+            excerpt_only=not full,
             posted=parse_date(item.get("pubDate")),
             salary=format_salary(
                 item.get("minSalary"),

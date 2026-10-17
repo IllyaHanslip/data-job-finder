@@ -12,6 +12,7 @@ from pathlib import Path
 from job_finder.config import Settings
 from job_finder.filters import (
     TAG_ENTRY,
+    TAG_NEEDS_EXPERIENCE,
     TAG_SENIOR,
     TAG_TEACHING,
     WORK_NOT_STATED,
@@ -23,10 +24,13 @@ from job_finder.models import (
     SECTION_CHECK,
     SECTION_LOCAL,
     SECTION_REMOTE,
+    VERDICT_ENTRY,
+    VERDICT_NEEDS_EXPERIENCE,
+    VERDICT_UNCLEAR,
     Job,
 )
 from job_finder.sources.base import SourceResult
-from job_finder.text import safe_url, shorten
+from job_finder.text import safe_url, shorten, spreadsheet_safe
 
 log = logging.getLogger(__name__)
 
@@ -37,8 +41,11 @@ SECTION_LABELS = {SECTION_REMOTE: "Remote", SECTION_LOCAL: "Near home", SECTION_
 CSV_COLUMNS = [
     "Section", "New today", "Title", "Company", "Location", "Work pattern", "Distance (km)",
     "Est. drive (min)", "Salary", "Contract", "Posted", "Source", "Also listed on", "Tags",
-    "CV skills matched", "Score", "Link", "Description",
+    "CV skills matched", "Claude verdict", "Experience asked (years)", "Claude's evidence",
+    "Score", "Link", "Description",
 ]
+CLAUDE_LABELS = {VERDICT_ENTRY: "entry level", VERDICT_NEEDS_EXPERIENCE: "needs experience",
+                 VERDICT_UNCLEAR: "can't tell"}
 
 
 def write_reports(
@@ -47,12 +54,13 @@ def write_reports(
     summary: FilterSummary,
     settings: Settings,
     generated_at: datetime,
+    claude_status: str = "",
 ) -> tuple[Path, Path]:
     """Write today's HTML and CSV reports and return their paths."""
     out = settings.output_dir
     out.mkdir(parents=True, exist_ok=True)
     stem = f"jobs_{generated_at:%Y-%m-%d}"
-    page = render_html(jobs, results, summary, settings, generated_at)
+    page = render_html(jobs, results, summary, settings, generated_at, claude_status)
     html_path = _write_with_fallback(
         out / f"{stem}.html", generated_at, lambda path: path.write_text(page, encoding="utf-8")
     )
@@ -86,28 +94,26 @@ def write_csv(jobs: list[Job], path: Path) -> None:
             writer.writerow([
                 SECTION_LABELS.get(job.section, job.section),
                 "yes" if job.is_new else "",
-                _cell(job.title),
-                _cell(job.company),
-                _cell(job.location),
+                spreadsheet_safe(job.title),
+                spreadsheet_safe(job.company),
+                spreadsheet_safe(job.location),
                 job.work_mode,
                 "" if job.distance_km is None else job.distance_km,
                 "" if job.drive_minutes is None else job.drive_minutes,
-                _cell(job.salary),
-                _cell(job.contract),
+                spreadsheet_safe(job.salary),
+                spreadsheet_safe(job.contract),
                 job.posted.isoformat() if job.posted else "",
                 job.source,
                 ", ".join(job.also_on),
                 ", ".join(job.tags),
                 ", ".join(job.matched_skills),
+                CLAUDE_LABELS.get(job.claude_verdict, ""),
+                "" if job.claude_years is None else job.claude_years,
+                spreadsheet_safe(job.claude_evidence),
                 job.score,
                 safe_url(job.url),
-                _cell(shorten(job.description, CSV_DESCRIPTION_CHARS)),
+                spreadsheet_safe(shorten(job.description, CSV_DESCRIPTION_CHARS)),
             ])
-
-
-def _cell(value: str) -> str:
-    """Stop spreadsheet programs from treating text copied from an advert as a formula."""
-    return f"'{value}" if value.startswith(("=", "+", "-", "@", "\t", "\r")) else value
 
 
 def render_html(
@@ -116,6 +122,7 @@ def render_html(
     summary: FilterSummary,
     settings: Settings,
     generated_at: datetime,
+    claude_status: str = "",
 ) -> str:
     today = generated_at.date()
     home = settings.home.name
@@ -175,9 +182,9 @@ def render_html(
         "<header>",
         f"<h1>Data &amp; maths jobs: remote or near {_e(home)}</h1>",
         f'<p class="summary">{_e(headline)}</p>',
-        _sources_html(results, summary),
+        _sources_html(results, summary, claude_status),
         _APPLICATIONS,
-        _CONTROLS,
+        _controls(with_claude=any(job.claude_verdict for job in jobs)),
         "</header>",
         "<main>",
         *sections,
@@ -190,12 +197,16 @@ def render_html(
     ])
 
 
-def _sources_html(results: list[SourceResult], summary: FilterSummary) -> str:
+def _sources_html(
+    results: list[SourceResult], summary: FilterSummary, claude_status: str = ""
+) -> str:
     items = "".join(
         f'<li><a href="{_e(result.homepage)}" target="_blank" rel="noopener noreferrer">'
         f"{_e(result.name)}</a>: {_e(result.status)}</li>"
         for result in results
     )
+    if claude_status:
+        items += f"<li>Claude's entry-level check: {_e(claude_status)}</li>"
     stats = (
         f"Checked {summary.received} listings and kept {summary.kept} "
         f"({summary.duplicates} duplicates merged)."
@@ -241,7 +252,7 @@ def _card(job: Job, today: date) -> str:
     url = safe_url(job.url)
     badges = ['<span class="badge new">New</span>'] if job.is_new else []
     for tag in job.tags:
-        style = {TAG_ENTRY: "entry", TAG_SENIOR: "warn"}.get(tag, "")
+        style = {TAG_ENTRY: "entry", TAG_SENIOR: "warn", TAG_NEEDS_EXPERIENCE: "warn"}.get(tag, "")
         badges.append(f'<span class="badge {style}">{_e(tag)}</span>')
     if job.drive_minutes is not None and job.drive_minutes > 60:
         badges.append('<span class="badge warn">Over 1 hr?</span>')
@@ -254,6 +265,8 @@ def _card(job: Job, today: date) -> str:
         f'<h3>{title}{"".join(badges)}</h3>',
         f'<p class="meta">{_e(_meta_line(job, today))}</p>',
     ]
+    if job.claude_verdict:
+        parts.append(f'<p class="claude">{_e(_claude_line(job))}</p>')
     summary = shorten(job.description, SUMMARY_CHARS)
     if summary:
         parts.append(f'<p class="desc">{_e(summary)}</p>')
@@ -279,12 +292,26 @@ def _card(job: Job, today: date) -> str:
     # using these details even after the job drops out of the results.
     attributes = (
         f'data-new="{int(job.is_new)}" data-entry="{int(TAG_ENTRY in job.tags)}" '
+        f'data-needs-exp="{int(TAG_NEEDS_EXPERIENCE in job.tags)}" '
         f'data-teaching="{int(TAG_TEACHING in job.tags)}" data-applied="0" '
         f'data-key="{_e(job_key(job))}" data-title="{_e(job.title)}" '
         f'data-company="{_e(job.company)}" data-location="{_e(job.location)}" '
         f'data-url="{_e(url)}"'
     )
     return f'<article class="job" {attributes}>{"".join(parts)}</article>'
+
+
+def _claude_line(job: Job) -> str:
+    """Claude's verdict, and the words from the advert it was based on."""
+    if job.claude_verdict == VERDICT_NEEDS_EXPERIENCE:
+        asks = f"asks for {job.claude_years}+ years" if job.claude_years else "asks for experience"
+        verdict = f"needs experience ({asks})"
+    elif job.claude_verdict == VERDICT_ENTRY:
+        verdict = "entry level"
+    else:
+        verdict = "can't tell from the advert"
+    quote = f": “{job.claude_evidence}”" if job.claude_evidence else ""
+    return f"Claude's check: {verdict}{quote}"
 
 
 def _meta_line(job: Job, today: date) -> str:
@@ -317,14 +344,20 @@ def _e(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
-_CONTROLS = """<div class="controls" role="search">
-<input type="search" id="filter-text" aria-label="Filter jobs"
-  placeholder="Filter by word, company or place">
-<label><input type="checkbox" id="filter-new"> New today</label>
-<label><input type="checkbox" id="filter-entry"> Entry level only</label>
-<label><input type="checkbox" id="filter-teaching"> Hide teaching</label>
-<label><input type="checkbox" id="filter-applied"> Hide applied</label>
-</div>"""
+def _controls(with_claude: bool) -> str:
+    """The filter bar. The "needs experience" filter only appears when Claude's check ran."""
+    claude = ('<label><input type="checkbox" id="filter-experienced"> Hide "needs '
+              'experience"</label>\n') if with_claude else ""
+    return (
+        '<div class="controls" role="search">\n'
+        '<input type="search" id="filter-text" aria-label="Filter jobs"\n'
+        '  placeholder="Filter by word, company or place">\n'
+        '<label><input type="checkbox" id="filter-new"> New today</label>\n'
+        '<label><input type="checkbox" id="filter-entry"> Entry level only</label>\n'
+        '<label><input type="checkbox" id="filter-teaching"> Hide teaching</label>\n'
+        '<label><input type="checkbox" id="filter-applied"> Hide applied</label>\n'
+        f"{claude}</div>"
+    )
 
 _APPLICATIONS = """<details class="applications">
 <summary>My applications <span class="count" id="applied-count">0</span></summary>
@@ -408,6 +441,7 @@ details.section > summary { cursor: pointer; }
 .more summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
 .full { white-space: pre-line; margin-top: 6px; font-size: .92rem; }
 .skills { margin: 6px 0; font-size: .86rem; color: var(--muted); }
+.claude { margin: 0 0 8px; font-size: .88rem; color: var(--muted); }
 .links { margin: 8px 0 0; font-size: .92rem; }
 .apply { font-weight: 600; }
 .also { color: var(--muted); }
@@ -428,6 +462,7 @@ _SCRIPT = """
   var onlyEntry = document.getElementById("filter-entry");
   var hideTeaching = document.getElementById("filter-teaching");
   var hideApplied = document.getElementById("filter-applied");
+  var hideExperienced = document.getElementById("filter-experienced");  // Claude's check only
   var list = document.getElementById("applied-list");
   var appliedCount = document.getElementById("applied-count");
   var note = document.getElementById("applied-note");
@@ -447,7 +482,8 @@ _SCRIPT = """
         (!onlyNew.checked || job.dataset.new === "1") &&
         (!onlyEntry.checked || job.dataset.entry === "1") &&
         (!hideTeaching.checked || job.dataset.teaching !== "1") &&
-        (!hideApplied.checked || job.dataset.applied !== "1");
+        (!hideApplied.checked || job.dataset.applied !== "1") &&
+        (!hideExperienced || !hideExperienced.checked || job.dataset.needsExp !== "1");
       job.hidden = !show;
     });
     document.querySelectorAll("[data-count-for]").forEach(function (badge) {
@@ -605,10 +641,12 @@ _SCRIPT = """
   jobs.forEach(function (job) {
     job.querySelector(".mark-applied").addEventListener("click", function () { toggle(job); });
   });
-  [text, onlyNew, onlyEntry, hideTeaching, hideApplied].forEach(function (el) {
-    el.addEventListener("input", update);
-    el.addEventListener("change", update);
-  });
+  [text, onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced]
+    .filter(Boolean)
+    .forEach(function (el) {
+      el.addEventListener("input", update);
+      el.addEventListener("change", update);
+    });
   download.addEventListener("click", downloadList);
   window.addEventListener("storage", function (event) {
     if (event.key === STORE && canSave) {

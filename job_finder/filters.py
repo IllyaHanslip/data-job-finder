@@ -17,6 +17,8 @@ from job_finder.models import (
     SECTION_CHECK,
     SECTION_LOCAL,
     SECTION_REMOTE,
+    VERDICT_ENTRY,
+    VERDICT_NEEDS_EXPERIENCE,
     Job,
 )
 
@@ -28,6 +30,7 @@ WORK_NOT_STATED = "Not stated"
 TAG_ENTRY = "Entry level"
 TAG_SENIOR = "Senior"
 TAG_TEACHING = "Teaching"
+TAG_NEEDS_EXPERIENCE = "Needs experience"  # from the optional Claude check
 
 REASON_TOO_OLD = "older than the age limit"
 REASON_NOT_UK = "remote jobs not open to UK applicants"
@@ -217,6 +220,20 @@ def enrich(job: Job, rules: Rules, settings: Settings, today: date) -> None:
     job.score = _score(job, today)
 
 
+def apply_claude_verdicts(jobs: list[Job], today: date) -> None:
+    """Let Claude's reading of the whole advert overrule the title's entry-level badge."""
+    for job in jobs:
+        if job.claude_verdict == VERDICT_NEEDS_EXPERIENCE:
+            job.tags = [tag for tag in job.tags if tag != TAG_ENTRY]
+            if TAG_NEEDS_EXPERIENCE not in job.tags:
+                job.tags.append(TAG_NEEDS_EXPERIENCE)
+        elif (job.claude_verdict == VERDICT_ENTRY and TAG_ENTRY not in job.tags
+              and TAG_SENIOR not in job.tags):
+            job.tags.insert(0, TAG_ENTRY)
+        job.score = _score(job, today)
+    jobs.sort(key=_sort_key)
+
+
 def choose_section(job: Job, radius_km: float) -> str:
     if job.work_mode == WORK_REMOTE:
         return SECTION_REMOTE
@@ -284,6 +301,7 @@ def _merge(kept: Job, other: Job) -> None:
         kept.latitude, kept.longitude = other.latitude, other.longitude
     if len(other.description) > len(kept.description):
         kept.description = other.description
+        kept.excerpt_only = other.excerpt_only
     if not kept.salary and other.salary:
         kept.salary = other.salary
     if kept.posted is None:
@@ -306,6 +324,8 @@ def _score(job: Job, today: date) -> int:
         score -= 3
     if TAG_SENIOR in job.tags:
         score -= 6
+    if TAG_NEEDS_EXPERIENCE in job.tags:
+        score -= 4
     return score
 
 

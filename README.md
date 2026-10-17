@@ -26,7 +26,7 @@ Within each section, entry-level roles and adverts mentioning more of your CV sk
 | Source | What it adds | Key | Limits the tool keeps to |
 |---|---|---|---|
 | [Adzuna](https://developer.adzuna.com) | Adverts from most UK job sites, near home and UK-wide remote | Required: 25 free trial calls, then £8 a month | The paid plan allows 500 calls a day and 5,000 a month. The tool sends at most 80 a day, at least 3 s apart, and reuses answers for 8 h |
-| [Reed](https://www.reed.co.uk/developers/jobseeker) | Reed.co.uk adverts, near home and UK-wide remote | Free, required | No published limit. At most 100 a day, at least 3 s apart, answers reused for 8 h |
+| [Reed](https://www.reed.co.uk/developers/jobseeker) | Reed.co.uk adverts, near home and UK-wide remote | Free, required | No published limit. At most 100 searches a day, at least 3 s apart, answers reused for 8 h. With Claude's check on, it also fetches each kept advert's full text once (saved for 30 days), up to 200 requests a day in all |
 | [Himalayas](https://himalayas.app/docs/remote-jobs-api) | Remote jobs open to UK residents, entry and mid level | None | Data refreshes daily, so answers are reused for 24 h |
 | [Remotive](https://github.com/remotive-com/remote-jobs-api) | Remote data and analytics jobs | None | Asks for at most 4 calls a day: 1 call per run, at most 4 a day |
 | [Jobicy](https://jobicy.com/jobs-rss-feed) | Remote data science jobs | None | Asks for at most one pass an hour: answers reused for 6 h |
@@ -87,6 +87,33 @@ Everything lives in [`config.toml`](config.toml), and no code changes are needed
 - `[filters]`: the words a job title must contain, words that rule a job out, words marking senior or entry-level roles, and the CV skills to look for in adverts. A trailing `*` matches any ending (`statistic*` matches statistician and statistical).
 - `[sources]`: turn any site on or off.
 - `[report]`: which browser opens the report: Chrome, or your computer's default browser.
+- `[claude]`: the optional entry-level check described below.
+
+## Optional: Claude's entry-level check
+
+A title can mislead: a "Junior Data Analyst" advert sometimes asks for two years' experience. With this check on, the tool sends each kept advert to Claude, Anthropic's AI model, which answers whether it's really entry level, how many years of experience it asks for, and the words that decided it. Each job card shows the answer. Adverts that need experience lose their **Entry level** badge, move down the list, and can be hidden with a checkbox, and the spreadsheet gets three extra columns.
+
+To turn it on:
+
+1. Create an API key at <https://console.anthropic.com> and add it to `.env` as `ANTHROPIC_API_KEY=...`. Anthropic charges for each advert checked.
+2. Add this to `config.local.toml`, or change it in `config.toml`:
+
+   ```toml
+   [claude]
+   check_entry_level = true
+   ```
+
+Each advert is checked once and the answer is saved, so later runs only pay for new adverts, and `max_checks_per_run` caps how many one run can check. The default model is `claude-opus-5-5`; `model = "claude-haiku-5-5"` costs far less. If one of Anthropic's safety checks declines a request, Anthropic reruns it on a suitable fallback model. Only the advert is sent, nothing about you.
+
+Claude can only judge what it can read. Reed's search results carry just the start of each advert, so with the check on, the tool also fetches each kept Reed advert in full through Reed's official API. Adzuna only ever provides the first 500 characters, so Claude often answers "can't tell" for Adzuna adverts.
+
+### Measuring how often it agrees with you
+
+1. Run `.venv\Scripts\python.exe tools\make_label_sheet.py`. It picks 50 adverts from your latest results and writes `output/eval/labels.csv`, plus `adverts.md` with each advert's text. Nothing is sent to Claude.
+2. Open each advert's link, read the whole advert, and type `entry`, `experienced` or `unclear` in the `your_label` column.
+3. Run `.venv\Scripts\python.exe tools\evaluate_entry_check.py`. It says how many adverts it would send and roughly what that costs; add `--yes` to go ahead. It writes `output/eval/report.md`: how often Claude agrees with you, how many of the adverts you marked experienced it caught, how often its warnings were right, how full adverts compare with Adzuna's snippets, and every disagreement with Claude's reason.
+
+The labelled adverts stay in `output/`, which is never uploaded, because the listings belong to the job sites.
 
 ## How it works
 
@@ -107,8 +134,9 @@ flowchart LR
 4. **Each answer is parsed** into a common `Job` record (`job_finder/models.py`), with HTML stripped from descriptions and dates and salaries normalised (`job_finder/text.py`).
 5. **Filtering** (`job_finder/filters.py`) drops adverts that are too old, remote jobs not open to the UK, titles outside data and maths, excluded job types (IT support, security, recruiters) and senior roles. The same job listed on two sites is merged.
 6. **Labelling** works out whether each job is remote, hybrid or on-site from the advert's wording. It estimates the distance from home using the job's coordinates, or a built-in list of about 4,300 UK towns and cities (`job_finder/uk_places.tsv`), places the job in a section, notes which CV skills it mentions, and scores it for ordering.
-7. **History** (`job_finder/history.py`) remembers when each job was first seen, so new ones get a badge.
-8. **Reports** are written by `job_finder/report.py`. All text from adverts is escaped, so a malicious advert can't inject code into the page, and CSV cells are protected against spreadsheet formula injection.
+7. **Claude's check** (optional, `job_finder/entry_check.py`) asks Claude whether each advert is really entry level and adjusts its badge and ranking.
+8. **History** (`job_finder/history.py`) remembers when each job was first seen, so new ones get a badge.
+9. **Reports** are written by `job_finder/report.py`. All text from adverts is escaped, so a malicious advert can't inject code into the page, and CSV cells are protected against spreadsheet formula injection.
 
 Drive times are rough estimates: straight-line distance × 1.3 for winding roads, at about 60 km/h.
 
@@ -127,6 +155,8 @@ job_finder/
   models.py             the Job record
   sources/              one module per job API, plus shared base class
   filters.py            relevance, seniority, remote detection, de-duplication, ranking
+  entry_check.py        the optional Claude entry-level check
+  entry_eval.py         measuring that check against your own labels
   geo.py                distances and drive-time estimates
   uk_places.tsv         UK towns and cities used for distances (from GeoNames)
   text.py               HTML-to-text, dates, salaries
@@ -134,7 +164,8 @@ job_finder/
   report.py             HTML and CSV output
   storage.py            safe JSON file writing
 tests/                  pytest suite with canned API answers (no network)
-tools/                  build_uk_places.py rebuilds uk_places.tsv from GeoNames data
+tools/                  build_uk_places.py rebuilds uk_places.tsv from GeoNames data;
+                        make_label_sheet.py and evaluate_entry_check.py measure Claude's check
 ```
 
 ## Running the tests

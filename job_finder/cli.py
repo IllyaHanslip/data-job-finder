@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from job_finder.config import ConfigError, Settings, load_settings
+from job_finder.entry_check import check_jobs
 from job_finder.filters import FilterSummary, process_jobs
 from job_finder.history import SeenJobs
 from job_finder.http_client import PoliteClient
@@ -33,6 +34,7 @@ class RunResult:
     summary: FilterSummary
     html_path: Path
     csv_path: Path
+    claude_status: str = ""
 
 
 def run(
@@ -63,14 +65,21 @@ def run(
 
     collected = [job for result in results for job in result.jobs]
     jobs, summary = process_jobs(collected, settings, now.date())
+    try:
+        claude_status = check_jobs(jobs, settings, client, now.date())
+    except Exception as exc:  # the optional check must never cost you the report
+        log.warning("Claude's check failed unexpectedly (%s); carrying on without it.",
+                    type(exc).__name__)
+        log.debug("Details:", exc_info=True)
+        claude_status = f"failed unexpectedly ({type(exc).__name__})"
 
     history = SeenJobs(settings.cache_dir / "seen_jobs.json")
     history.load()
     history.mark(jobs, now.date())
     history.save(now.date())
 
-    html_path, csv_path = write_reports(jobs, results, summary, settings, now)
-    return RunResult(jobs, results, summary, html_path, csv_path)
+    html_path, csv_path = write_reports(jobs, results, summary, settings, now, claude_status)
+    return RunResult(jobs, results, summary, html_path, csv_path, claude_status)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -128,6 +137,8 @@ def _print_summary(outcome: RunResult, client: PoliteClient, settings: Settings)
     print("\nSources:")
     for result in outcome.sources:
         print(f"  {result.name:<{width}}  {result.status}")
+    if outcome.claude_status:
+        print(f"\nClaude's entry-level check: {outcome.claude_status}")
 
     summary = outcome.summary
     sections = Counter(job.section for job in outcome.jobs)

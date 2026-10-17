@@ -15,6 +15,7 @@ from job_finder.sources import (
     ReedSource,
     RemotiveSource,
 )
+from job_finder.text import html_to_text
 
 ADZUNA_ANSWER = {
     "__CLASS__": "Adzuna::API::Response::JobSearchResults",
@@ -221,6 +222,21 @@ def test_reed_reads_results(settings, fake_client):
     assert job.salary == "£30,000 – £34,000"
     assert job.url == "https://www.reed.co.uk/jobs/junior-data-scientist/56789012"
     assert "Bishop's Stortford" in job.description
+    assert job.excerpt_only  # search results only carry the start of each advert
+
+
+def test_reed_fetches_full_adverts_for_claudes_check(settings, fake_client):
+    full = "<p>" + "The full advert, with every requirement listed. " * 5 + "</p>"
+    client = fake_client([{"jobDescription": full}])
+    reed = ReedSource(settings, client)
+    snippet = reed.parse_item(REED_ANSWER["results"][0], SCOPE_LOCAL)
+    other_site = dataclasses.replace(snippet, source="Adzuna")
+    assert reed.add_full_descriptions([snippet, other_site]) == 1
+    assert len(client.calls) == 1  # the other site's advert is left alone
+    assert client.calls[0]["url"] == "https://www.reed.co.uk/api/1.0/jobs/56789012"
+    assert client.calls[0]["auth"] == ("test-reed-key", "")
+    assert snippet.description == html_to_text(full)
+    assert not snippet.excerpt_only
 
 
 def test_remotive_reads_jobs(settings, fake_client):
