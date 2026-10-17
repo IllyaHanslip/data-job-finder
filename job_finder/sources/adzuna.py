@@ -29,8 +29,8 @@ class AdzunaSource(JobSource):
     secret_params = ("app_id", "app_key")
     covers_home_area = True
     # New accounts get 25 trial calls; after that the £8-a-month plan allows 500 calls a day
-    # and 5,000 a month. 80 a day keeps even daily use well inside the monthly allowance.
-    politeness = Politeness(min_interval=3.0, cache_hours=8, daily_budget=80)
+    # and 5,000 a month. 100 a day keeps even daily use inside the monthly allowance.
+    politeness = Politeness(min_interval=3.0, cache_hours=8, daily_budget=100)
 
     SEARCH_URL = "https://api.adzuna.com/v1/api/jobs/gb/search/1"
 

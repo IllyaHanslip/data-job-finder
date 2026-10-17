@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     client = PoliteClient(settings.cache_dir, settings.user_agent, offline=args.offline)
     if not args.offline:
         log.info(
-            "A full search takes about 3 minutes (seconds if you ran it in the last few hours).\n"
+            "A full search takes about 8 minutes (seconds if you ran it in the last few hours).\n"
             "Keep this window open: the report opens when it's finished.\n"
         )
     try:
@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="find_jobs.py",
-        description="Find entry-level data science and maths jobs that are remote or near "
+        description="Find entry-level data science, AI and maths jobs that are remote or near "
         "home, using official job APIs.",
     )
     parser.add_argument(

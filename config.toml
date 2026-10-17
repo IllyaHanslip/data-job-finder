@@ -37,6 +37,14 @@ local_terms = [
     "python",
     "forecasting",
     "knowledge transfer partnership",
+    # AI roles
+    "artificial intelligence",
+    "AI engineer",
+    "AI developer",
+    "generative AI",
+    "LLM",
+    "AI automation",
+    "graduate AI",
 ]
 
 # Searched across the whole UK with "remote" added (Adzuna and Reed), and on Himalayas
@@ -50,6 +58,25 @@ remote_terms = [
     "actuarial",
     "quantitative analyst",
     "graduate data",
+    # AI roles, including ones that mainly want people who are good with AI tools
+    "AI engineer",
+    "artificial intelligence",
+    "generative AI",
+    "LLM",
+    "agentic",
+    "AI automation",
+    "AI developer",
+    "AI analyst",
+    "AI specialist",
+    "AI adoption",
+    "AI consultant",
+    "AI trainer",
+    "prompt engineer",
+    "NLP",
+    "computer vision",
+    "data annotation",
+    "graduate AI",
+    "junior AI",
 ]
 
 [filters]
@@ -61,6 +88,11 @@ title_keywords = [
     "actuar*", "operational research", "operations research", "econometric*",
     "insight*", "forecast*", "modeller", "modelling", "modeler", "modeling",
     "business intelligence", "bi", "ktp", "knowledge transfer", "research scientist",
+    # AI titles that don't say "AI"
+    "llm*", "genai", "gen ai", "generative", "prompt*", "nlp", "natural language",
+    "computer vision", "chatbot*", "conversational", "conversation design*", "agentic",
+    "copilot", "mlops", "automation", "rpa", "annotat*", "data label*", "rater",
+    "forward deployed",
 ]
 
 # ...and none of these (e.g. "Security Analyst", "Data Science Recruitment Consultant").
@@ -70,6 +102,9 @@ exclude_title_keywords = [
     "support analyst", "application support", "technical support", "it support",
     "test analyst", "qa", "quality assurance", "payroll", "bim", "cad", "revit",
     "recruit*", "account executive", "business development", "telesales", "data entry",
+    # software testing and factory automation, let in by "automation" above
+    "tester", "test automation", "automation test*", "test engineer", "plc", "scada",
+    "industrial automation",
 ]
 
 # Titles containing these count as senior (see include_senior_roles above).
@@ -95,6 +130,11 @@ cv_skills = [
     "regression", "arima", "linear algebra", "calculus", "differential equations",
     "optimisation", "optimization", "financial mathematics", "mathemat*", "maths",
     "excel", "latex", "github", "git", "msc", "masters", "master's", "2:1",
+    # AI ("RAG" alone would also match red-amber-green status reports)
+    "llm*", "large language model*", "generative ai", "genai", "prompt engineering",
+    "prompting", "claude", "anthropic", "chatgpt", "ai tools", "ai assisted",
+    "retrieval augmented*", "rag pipeline*", "rag system*", "rag based", "api", "apis",
+    "automation", "llm evaluation", "model evaluation", "evals",
 ]
 
 [sources]

@@ -29,12 +29,15 @@ class RemotiveSource(JobSource):
     politeness = Politeness(min_interval=35.0, cache_hours=6, daily_budget=4)
 
     URL = "https://remotive.com/api/remote-jobs"
+    CATEGORIES = {
+        "data": "Data and Analytics",
+        "artificial-intelligence": "Artificial Intelligence",
+    }
 
     def build_requests(self) -> list[SearchRequest]:
         return [
-            SearchRequest(
-                self.URL, {"category": "data"}, SCOPE_REMOTE_BOARD, "Data and Analytics category"
-            )
+            SearchRequest(self.URL, {"category": slug}, SCOPE_REMOTE_BOARD, f"{name} category")
+            for slug, name in self.CATEGORIES.items()
         ]
 
     def extract_items(self, data: Any) -> list[Any]:

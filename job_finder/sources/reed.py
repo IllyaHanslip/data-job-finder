@@ -27,13 +27,13 @@ class ReedSource(JobSource):
     env_vars = ("REED_API_KEY",)
     covers_home_area = True
     # Reed publishes no rate limit, so stay well clear of anything that could look like abuse.
-    politeness = Politeness(min_interval=3.0, cache_hours=8, daily_budget=100)
+    politeness = Politeness(min_interval=3.0, cache_hours=8, daily_budget=150)
 
     SEARCH_URL = "https://www.reed.co.uk/api/1.0/search"
     DETAILS_URL = "https://www.reed.co.uk/api/1.0/jobs/{}"
     # Only used by the Claude check. A job's details hardly change, so a saved copy is reused
-    # for a month. Reed's daily count is shared with the searches: at most 200 a day in all.
-    details_politeness = Politeness(min_interval=3.0, cache_hours=24 * 30, daily_budget=200)
+    # for a month. Reed's daily count is shared with the searches: at most 250 a day in all.
+    details_politeness = Politeness(min_interval=3.0, cache_hours=24 * 30, daily_budget=250)
 
     def build_requests(self) -> list[SearchRequest]:
         s = self.settings

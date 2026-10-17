@@ -1,4 +1,4 @@
-"""Find entry-level data science and maths jobs. Usage: python find_jobs.py [--help]"""
+"""Find entry-level data science, AI and maths jobs. Usage: python find_jobs.py [--help]"""
 
 from job_finder.cli import main
 

@@ -187,7 +187,7 @@ def render_html(
         "<body>",
         '<div class="wrap">',
         "<header>",
-        f"<h1>Data &amp; maths jobs: remote or near {_e(home)}</h1>",
+        f"<h1>Data, AI &amp; maths jobs: remote or near {_e(home)}</h1>",
         f'<p class="summary">{_e(headline)}</p>',
         _review_html(review, jobs),
         _sources_html(results, summary, claude_status),

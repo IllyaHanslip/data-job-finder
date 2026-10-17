@@ -240,7 +240,10 @@ def test_reed_fetches_full_adverts_for_claudes_check(settings, fake_client):
 
 
 def test_remotive_reads_jobs(settings, fake_client):
-    result = RemotiveSource(settings, fake_client([REMOTIVE_ANSWER])).run()
+    client = fake_client([REMOTIVE_ANSWER])
+    result = RemotiveSource(settings, client).run()
+    assert [call["params"]["category"] for call in client.calls] == [
+        "data", "artificial-intelligence"]  # both categories, within Remotive's 4 calls a day
     assert [job.title for job in result.jobs] == ["Data Analyst", "Analytics Engineer"]
     job = result.jobs[0]
     assert job.scope == SCOPE_REMOTE_BOARD
