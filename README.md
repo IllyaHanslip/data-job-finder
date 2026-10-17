@@ -1,5 +1,7 @@
 # Data Job Finder
 
+Built with [Claude Code](https://claude.com/claude-code).
+
 A Python tool that searches official job APIs for **entry-level data science, statistics and maths roles** that are either **remote and open to UK applicants** or **within about an hour's drive of home** (anywhere in the UK). It writes the results to an HTML page you can filter and a CSV file for Excel.
 
 It never scrapes websites. Every request goes to a documented public API, answers are saved and reused, and each API is called well inside its published limits, so it should not get your IP address blocked.
