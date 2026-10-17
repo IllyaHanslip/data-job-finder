@@ -10,7 +10,7 @@ It never scrapes websites. Every request goes to a documented public API, answer
 
 Each run writes two files to `output/`:
 
-- **`jobs_YYYY-MM-DD.html`** opens in your browser. Each job card shows the title, employer, location, remote/hybrid/on-site, a rough distance and drive time, salary, posting date, a description (expandable to the full text), which of your CV skills it mentions, and a link to the original advert to apply. Jobs first seen today are marked **New**, and you can filter by keyword, new jobs only, entry-level only, or hide teaching roles and jobs you've applied for. Click **Mark as applied** on a job once you've applied: it gets an **Applied** badge, and **My applications** at the top of the page lists every job you've marked, even after it drops out of the results, with a button to download the list as a spreadsheet. Your marks are stored by the browser: Chrome and Edge keep them from one day's report to the next, but clearing your browsing data deletes them.
+- **`jobs_YYYY-MM-DD.html`** opens in your browser. Each job card shows the title, employer, location, remote/hybrid/on-site, a rough distance and drive time, salary, posting date, a description (expandable to the full text), which of your CV skills it mentions, and a link to the original advert to apply. Jobs first seen today are marked **New**, and you can filter by keyword, new jobs only, entry-level only, or hide teaching roles and jobs you've applied for. Boxes you tick stay ticked in later reports. Click **Mark as applied** on a job once you've applied: it gets an **Applied** badge, and **My applications** at the top of the page lists every job you've marked, even after it drops out of the results, with a button to download the list as a spreadsheet. Your marks are stored by the browser: Chrome and Edge keep them from one day's report to the next, but clearing your browsing data deletes them.
 - **`jobs_YYYY-MM-DD.csv`** contains the same list for Excel or pandas.
 
 Jobs are grouped into three sections:
@@ -91,11 +91,11 @@ Everything lives in [`config.toml`](config.toml), and no code changes are needed
 
 ## Optional: Claude's entry-level check
 
-A title can mislead: a "Junior Data Analyst" advert sometimes asks for two years' experience. With this check on, the tool sends each kept advert to Claude, Anthropic's AI model, which answers whether it's really entry level, how many years of experience it asks for, and the words that decided it. Each job card shows the answer. Adverts that need experience lose their **Entry level** badge, move down the list, and can be hidden with a checkbox, and the spreadsheet gets three extra columns.
+A title can mislead: a "Junior Data Analyst" advert sometimes asks for two years' experience. With this check on, each kept advert is judged by Claude, Anthropic's AI model, either automatically through Anthropic's paid API or in a Claude Code chat (see below). Claude answers whether the advert is really entry level, how many years of experience it asks for, and the words that decided it. Each job card shows the answer. Adverts that need experience lose their **Entry level** badge, move down the list, and can be hidden with a checkbox, and the spreadsheet gets three extra columns.
 
-To turn it on:
+To have it run automatically through the API:
 
-1. Create an API key at <https://console.anthropic.com> and add it to `.env` as `ANTHROPIC_API_KEY=...`. Anthropic charges for each advert checked.
+1. Create an API key at <https://console.anthropic.com> and add it to `.env` as `ANTHROPIC_API_KEY=...`. Anthropic charges for each advert checked; a Claude Pro or Max plan doesn't include API use.
 2. Add this to `config.local.toml`, or change it in `config.toml`:
 
    ```toml
@@ -107,11 +107,20 @@ Each advert is checked once and the answer is saved, so later runs only pay for 
 
 Claude can only judge what it can read. Reed's search results carry just the start of each advert, so with the check on, the tool also fetches each kept Reed advert in full through Reed's official API. Adzuna only ever provides the first 500 characters, so Claude often answers "can't tell" for Adzuna adverts.
 
+### Without an API key: ask Claude Code
+
+Claude Code, which comes with Claude's Pro and Max plans, can do the judging in a chat instead, at no API cost:
+
+1. Turn the check on as above (`check_entry_level = true`). No API key is needed.
+2. In Claude Code, ask it to "review the new adverts for entry level". It runs `tools\review_adverts.py export`, reads `output/review/to_review.md`, writes its verdicts to `output/review/verdicts.json`, runs `tools\review_adverts.py import`, then rebuilds the report with `find_jobs.py --offline`.
+
+The verdicts are saved like the API's, so each advert is judged once. Adverts nobody has judged yet are counted as "not judged yet" in the report's Sources panel.
+
 ### Measuring how often it agrees with you
 
 1. Run `.venv\Scripts\python.exe tools\make_label_sheet.py`. It picks 50 adverts from your latest results and writes `output/eval/labels.csv`, plus `adverts.md` with each advert's text. Nothing is sent to Claude.
 2. Open each advert's link, read the whole advert, and type `entry`, `experienced` or `unclear` in the `your_label` column.
-3. Run `.venv\Scripts\python.exe tools\evaluate_entry_check.py`. It says how many adverts it would send and roughly what that costs; add `--yes` to go ahead. It writes `output/eval/report.md`: how often Claude agrees with you, how many of the adverts you marked experienced it caught, how often its warnings were right, how full adverts compare with Adzuna's snippets, and every disagreement with Claude's reason.
+3. Run `.venv\Scripts\python.exe tools\evaluate_entry_check.py`. Adverts already judged, through the API or in Claude Code, cost nothing. With an API key, it says how many others it would send and roughly what that costs; add `--yes` to go ahead. It writes `output/eval/report.md`: how often Claude agrees with you, how many of the adverts you marked experienced it caught, how often its warnings were right, how full adverts compare with Adzuna's snippets, and every disagreement with Claude's reason.
 
 The labelled adverts stay in `output/`, which is never uploaded, because the listings belong to the job sites.
 
@@ -157,6 +166,7 @@ job_finder/
   filters.py            relevance, seniority, remote detection, de-duplication, ranking
   entry_check.py        the optional Claude entry-level check
   entry_eval.py         measuring that check against your own labels
+  review.py             judging adverts in a Claude Code chat instead of the API
   geo.py                distances and drive-time estimates
   uk_places.tsv         UK towns and cities used for distances (from GeoNames)
   text.py               HTML-to-text, dates, salaries
@@ -165,7 +175,8 @@ job_finder/
   storage.py            safe JSON file writing
 tests/                  pytest suite with canned API answers (no network)
 tools/                  build_uk_places.py rebuilds uk_places.tsv from GeoNames data;
-                        make_label_sheet.py and evaluate_entry_check.py measure Claude's check
+                        review_adverts.py hands adverts to Claude Code for judging;
+                        make_label_sheet.py and evaluate_entry_check.py measure the verdicts
 ```
 
 ## Running the tests

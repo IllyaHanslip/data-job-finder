@@ -467,6 +467,8 @@ _SCRIPT = """
   var appliedCount = document.getElementById("applied-count");
   var note = document.getElementById("applied-note");
   var download = document.getElementById("applied-download");
+  var FILTERS = "data-job-finder.filters";  // ticked filters, remembered between reports
+  var boxes = [onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced].filter(Boolean);
   var jobs = Array.prototype.slice.call(document.querySelectorAll(".job"));
   var haystacks = jobs.map(function (job) {
     var button = job.querySelector(".mark-applied");
@@ -525,6 +527,25 @@ _SCRIPT = """
   function warnNotSaved() {
     note.textContent = "This browser won't let the page save your marks, so they will be " +
       "forgotten when you close it. Download the list to keep a copy.";
+  }
+
+  function restoreFilters() {
+    try {
+      var saved = JSON.parse(window.localStorage.getItem(FILTERS) || "{}");
+      boxes.forEach(function (box) { box.checked = saved[box.id] === true; });
+    } catch (e) {
+      return;  // storage blocked: start with nothing ticked
+    }
+  }
+
+  function saveFilters() {
+    try {
+      var saved = JSON.parse(window.localStorage.getItem(FILTERS) || "{}");
+      boxes.forEach(function (box) { saved[box.id] = box.checked; });
+      window.localStorage.setItem(FILTERS, JSON.stringify(saved));
+    } catch (e) {
+      return;
+    }
   }
 
   function pad(n) {
@@ -647,6 +668,7 @@ _SCRIPT = """
       el.addEventListener("input", update);
       el.addEventListener("change", update);
     });
+  boxes.forEach(function (box) { box.addEventListener("change", saveFilters); });
   download.addEventListener("click", downloadList);
   window.addEventListener("storage", function (event) {
     if (event.key === STORE && canSave) {
@@ -661,6 +683,7 @@ _SCRIPT = """
   } else {
     warnNotSaved();
   }
+  restoreFilters();
   refresh();
 })();
 """

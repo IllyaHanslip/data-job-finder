@@ -145,18 +145,19 @@ def wilson(matches: int, total: int, z: float = 1.96) -> tuple[float, float]:
     return max(0.0, (centre - margin) / scale), min(1.0, (centre + margin) / scale)
 
 
-def render_report(rows: list[dict[str, Any]], errors: list[dict[str, Any]], model: str,
-                  effort: str, spent: float | None) -> str:
+def render_report(rows: list[dict[str, Any]], errors: list[dict[str, Any]],
+                  spent: float | None) -> str:
     """The evaluation as Markdown: headline, measures, confusion table and disagreements."""
     measures = score(rows)
     agree, total = measures["agreement"]
     low, high = wilson(agree, total)
-    cost = f"about ${spent:.2f}" if spent is not None else "unknown"
+    answered_by = ", ".join(sorted({str(row["model"]) for row in rows if row.get("model")}))
+    cost = "unknown" if spent is None else (f"about ${spent:.2f}" if spent else "nothing")
     lines = [
         "# How often Claude agrees with you",
         "",
-        f"Model: {model} (effort {effort}) · {total + len(errors)} labelled adverts · "
-        f"{total} checked · {len(errors)} couldn't be checked · new checks cost {cost}",
+        f"Answers from {answered_by or 'nobody yet'} · {total + len(errors)} labelled adverts · "
+        f"{total} judged · {len(errors)} not judged · new paid checks cost {cost}",
         "",
     ]
     if total:
@@ -201,7 +202,7 @@ def render_report(rows: list[dict[str, Any]], errors: list[dict[str, Any]], mode
     if not disagreements:
         lines += ["None.", ""]
     if errors:
-        lines += ["## Couldn't be checked", ""]
+        lines += ["## Not judged", ""]
         lines += [f"- {_one_line(error['title'])}: {error['error']}" for error in errors]
         lines.append("")
     return "\n".join(lines)

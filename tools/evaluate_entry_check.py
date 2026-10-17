@@ -4,8 +4,9 @@ Run from the project folder once output/eval/labels.csv has labels in it:
     .venv\Scripts\python.exe tools\evaluate_entry_check.py        (says what it would cost)
     .venv\Scripts\python.exe tools\evaluate_entry_check.py --yes  (sends the adverts)
 
-It uses the same check, model and saved answers as find_jobs.py, so adverts already checked
-cost nothing. Writes output/eval/report.md, plus results.jsonl and errors.jsonl.
+It uses the same check, model and saved answers as find_jobs.py, so adverts already judged,
+through the API or in Claude Code, cost nothing; with no ANTHROPIC_API_KEY only those are
+measured. Writes output/eval/report.md, plus results.jsonl and errors.jsonl.
 """
 
 from __future__ import annotations
@@ -23,9 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from job_finder.cli import _set_up_console  # noqa: E402
 from job_finder.config import load_settings  # noqa: E402
 from job_finder.entry_check import (  # noqa: E402
-    SIGN_UP_URL,
+    SAVED_FILE,
     EntryLevelChecker,
     advert_text,
+    api_client,
     estimate_cost,
 )
 from job_finder.entry_eval import job_from_case, load_cases, render_report, score  # noqa: E402
@@ -50,40 +52,39 @@ def main(argv: list[str] | None = None) -> int:
     if not cases:
         print(f"No labels yet: fill in the your_label column of {folder / 'labels.csv'}.")
         return 2
-    key = settings.api_keys.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        print(f"Add ANTHROPIC_API_KEY to .env first (get a key at {SIGN_UP_URL}).")
-        return 2
-    try:
-        import anthropic
-    except ImportError:
-        print("The anthropic package is missing: run pip install -r requirements.txt")
-        return 2
-
     jobs = [job_from_case(case) for case in cases]
     settings = dataclasses.replace(
         settings, max_claude_checks=max(len(jobs), settings.max_claude_checks)
     )
-    saved = settings.cache_dir / "claude_verdicts.json"
+    saved = settings.cache_dir / SAVED_FILE
     if args.fresh:
-        saved = Path(tempfile.mkdtemp()) / "claude_verdicts.json"
-    client = anthropic.Anthropic(api_key=key, max_retries=3, timeout=120.0)
+        saved = Path(tempfile.mkdtemp()) / SAVED_FILE
+    client = api_client(settings)
     checker = EntryLevelChecker(settings, client, saved, date.today())
     to_ask = [job for job in jobs if checker.saved_answer(job) is None]
-    estimate = estimate_cost(to_ask, settings.claude_model)
-    cost = f"roughly ${estimate:.2f} (an estimate)" if estimate is not None else "cost unknown"
-    print(f"{len(jobs)} labelled adverts: {len(jobs) - len(to_ask)} already have a saved "
-          f"answer, {len(to_ask)} to send to {settings.claude_model}, {cost}.")
-    if to_ask and not args.yes:
-        print("Nothing has been sent. Run again with --yes to go ahead.")
-        return 0
+    if client is None:
+        print(f"{len(jobs)} labelled adverts, {len(jobs) - len(to_ask)} with a saved verdict.")
+        if to_ask:
+            print(f"{len(to_ask)} have no verdict yet and are left out. With no "
+                  "ANTHROPIC_API_KEY, ask Claude Code to review them first "
+                  "(tools\\review_adverts.py export).")
+        if len(to_ask) == len(jobs):
+            return 2
+    else:
+        estimate = estimate_cost(to_ask, settings.claude_model)
+        cost = f"roughly ${estimate:.2f} (an estimate)" if estimate is not None else "cost unknown"
+        print(f"{len(jobs)} labelled adverts: {len(jobs) - len(to_ask)} already have a saved "
+              f"answer, {len(to_ask)} to send to {settings.claude_model}, {cost}.")
+        if to_ask and not args.yes:
+            print("Nothing has been sent. Run again with --yes to go ahead.")
+            return 0
 
     checker.check(jobs)
     rows, errors = [], []
     for case, job in zip(cases, jobs, strict=True):
         answer = checker.saved_answer(job)
         if answer is None:
-            reason = checker.failures.get(job_key(job)) or checker.stop_reason or "not checked"
+            reason = checker.failures.get(job_key(job)) or checker.stop_reason or "not judged yet"
             errors.append({"prompt_id": case["id"], "title": case["title"], "error": reason})
             continue
         rows.append({
@@ -109,8 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     _write_jsonl(folder / "results.jsonl", rows)
     _write_jsonl(folder / "errors.jsonl", errors)
     report = folder / "report.md"
-    report.write_text(render_report(rows, errors, settings.claude_model, settings.claude_effort,
-                                    checker.spent), encoding="utf-8")
+    report.write_text(render_report(rows, errors, checker.spent), encoding="utf-8")
     agree, total = score(rows)["agreement"]
     if total:
         print(f"\nClaude agreed with you on {agree} of {total} adverts ({agree / total:.0%}).")

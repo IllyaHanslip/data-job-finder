@@ -112,10 +112,10 @@ def test_card_shows_claudes_check(settings):
     assert (row["Claude verdict"], row["Experience asked (years)"]) == ("needs experience", "2")
 
 
-def test_claude_check_reports_a_missing_key(settings):
+def test_without_an_api_key_the_check_waits_for_a_review(settings):
     turned_on = dataclasses.replace(settings, check_entry_level=True)
     outcome = cli.run(turned_on, offline_client(turned_on), [FakeSource], NOW)
-    assert outcome.claude_status.startswith("skipped: add ANTHROPIC_API_KEY")
+    assert "1 not judged yet" in outcome.claude_status
 
 
 def test_card_links_every_site_a_job_was_found_on(settings):

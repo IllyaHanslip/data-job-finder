@@ -1,9 +1,11 @@
-"""Ask Claude whether each advert is really entry level. Optional: needs ANTHROPIC_API_KEY.
+"""Ask Claude whether each advert is really entry level (optional).
 
-A title can say "Graduate" or "Junior" while the advert asks for two years' experience. This
-step sends each kept advert to Claude, which answers with a verdict, the years of experience
-the advert asks for, and the words it based that on. Answers are saved per advert, so each
-advert is paid for once; a changed advert, prompt or model is checked again.
+A title can say "Graduate" or "Junior" while the advert asks for two years' experience. With
+ANTHROPIC_API_KEY, this step sends each kept advert to Claude, which answers with a verdict,
+the years of experience the advert asks for, and the words it based that on. Without a key,
+adverts can be judged in a Claude Code chat instead (see review.py). Either way, answers are
+saved per advert, so each advert is judged once; a changed advert, prompt or model is
+judged again.
 """
 
 from __future__ import annotations
@@ -18,15 +20,17 @@ from pathlib import Path
 from typing import Any
 
 from job_finder.config import Settings
-from job_finder.filters import apply_claude_verdicts, job_key
+from job_finder.filters import apply_claude_verdicts, job_key, process_jobs
 from job_finder.http_client import PoliteClient
 from job_finder.models import VERDICT_ENTRY, VERDICT_NEEDS_EXPERIENCE, VERDICT_UNCLEAR, Job
+from job_finder.sources import ALL_SOURCES
 from job_finder.sources.reed import ReedSource
 from job_finder.storage import read_json, write_json
 
 log = logging.getLogger(__name__)
 
 SIGN_UP_URL = "https://console.anthropic.com"
+SAVED_FILE = "claude_verdicts.json"  # in the cache folder
 PROMPT_VERSION = 1  # change whenever SYSTEM_PROMPT changes, so saved answers are redone
 KEEP_DAYS = 120  # saved answers older than this are dropped
 WORKERS = 4  # adverts sent to Claude at the same time
@@ -90,31 +94,44 @@ class StopChecking(Exception):
 
 
 def check_jobs(jobs: list[Job], settings: Settings, client: PoliteClient, today: date) -> str:
-    """Run the optional check on the kept jobs. Returns a status line, or "" when it's off."""
+    """Run the optional check on the kept jobs. Returns a status line, or "" when it's off.
+
+    Without ANTHROPIC_API_KEY nothing is sent to Claude, and only saved verdicts are used.
+    """
     if not settings.check_entry_level:
         return ""
-    key = settings.api_keys.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        status = f"skipped: add ANTHROPIC_API_KEY to .env (get a key at {SIGN_UP_URL})"
-        log.info("Claude check %s", status)
-        return status
-    try:
-        import anthropic  # only needed when the check is on
-    except ImportError:
-        status = "skipped: the anthropic package is missing (run pip install -r requirements.txt)"
-        log.warning("Claude check %s", status)
-        return status
     ReedSource(settings, client).add_full_descriptions(jobs)
-    checker = EntryLevelChecker(
-        settings,
-        anthropic.Anthropic(api_key=key, max_retries=3, timeout=120.0),
-        settings.cache_dir / "claude_verdicts.json",
-        today,
-        offline=client.offline,
-    )
+    checker = EntryLevelChecker(settings, api_client(settings), settings.cache_dir / SAVED_FILE,
+                                today, offline=client.offline)
     status = checker.check(jobs)
     apply_claude_verdicts(jobs, today)
     return status
+
+
+def api_client(settings: Settings) -> Any | None:
+    """An anthropic.Anthropic for ANTHROPIC_API_KEY, or None when there's no key."""
+    key = settings.api_keys.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        return None
+    try:
+        import anthropic  # only needed when there's a key
+    except ImportError:
+        log.warning("The anthropic package is missing, so Claude can't be asked "
+                    "(run pip install -r requirements.txt).")
+        return None
+    return anthropic.Anthropic(api_key=key, max_retries=3, timeout=120.0)
+
+
+def latest_jobs(settings: Settings, today: date) -> list[Job]:
+    """The jobs in the last run's saved answers, filtered as a run would. No new searches."""
+    saved = PoliteClient(settings.cache_dir, settings.user_agent, offline=True)
+    collected = []
+    for source_type in ALL_SOURCES:
+        source = source_type(settings, saved)
+        if settings.sources.get(source.key, True):
+            collected.extend(source.run().jobs)
+    jobs, _ = process_jobs(collected, settings, today)
+    return jobs
 
 
 def advert_text(job: Job) -> str:
@@ -146,12 +163,15 @@ def estimate_cost(jobs: list[Job], model: str) -> float | None:
 
 
 class EntryLevelChecker:
-    """Checks adverts with Claude and keeps the answers. `client` is an anthropic.Anthropic."""
+    """Checks adverts with Claude and keeps the answers.
+
+    `client` is an anthropic.Anthropic, or None to use saved answers only.
+    """
 
     def __init__(
         self,
         settings: Settings,
-        client: Any,
+        client: Any | None,
         saved_path: Path,
         today: date,
         offline: bool = False,
@@ -172,9 +192,15 @@ class EntryLevelChecker:
     def saved_answer(self, job: Job) -> dict[str, Any] | None:
         """The saved answer for this exact advert, prompt and model, if there is one."""
         answer = self._saved.get(job_key(job))
-        if isinstance(answer, dict) and answer.get("fingerprint") == self._fingerprint(job):
+        if isinstance(answer, dict) and answer.get("fingerprint") == self.fingerprint(job):
             return answer
         return None
+
+    def fingerprint(self, job: Job) -> str:
+        """Identifies the advert text, prompt and model an answer was given for."""
+        s = self.settings
+        text = f"{PROMPT_VERSION}\n{s.claude_model}\n{s.claude_effort}\n{advert_text(job)}"
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
     def check(self, jobs: list[Job]) -> str:
         """Fill in each job's Claude verdict, asking only about adverts it hasn't seen.
@@ -191,7 +217,7 @@ class EntryLevelChecker:
         reused = len(jobs) - len(todo)
         limit = self.settings.max_claude_checks
         waiting = 0
-        if self.offline:
+        if self.offline or self.client is None:
             waiting, todo = len(todo), []
         elif len(todo) > limit:
             waiting, todo = len(todo) - limit, todo[:limit]
@@ -281,7 +307,7 @@ class EntryLevelChecker:
             with self._lock:
                 self.failures[job_key(job)] = f"unexpected problem ({type(exc).__name__})"
             return
-        answer = {"fingerprint": self._fingerprint(job), "checked": self.today.isoformat(),
+        answer = {"fingerprint": self.fingerprint(job), "checked": self.today.isoformat(),
                   **result}
         cost = _cost(answer)
         with self._lock:
@@ -289,11 +315,6 @@ class EntryLevelChecker:
             self.checked += 1
             self.spent = None if self.spent is None or cost is None else self.spent + cost
         _apply(job, answer)
-
-    def _fingerprint(self, job: Job) -> str:
-        s = self.settings
-        text = f"{PROMPT_VERSION}\n{s.claude_model}\n{s.claude_effort}\n{advert_text(job)}"
-        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
     def _save(self) -> None:
         cutoff = (self.today - timedelta(days=KEEP_DAYS)).isoformat()
@@ -305,6 +326,12 @@ class EntryLevelChecker:
             log.warning("Could not save Claude's answers (%s); they'll be asked again.", exc)
 
     def _describe(self, reused: int, waiting: int) -> str:
+        if self.client is None:
+            text = f"{reused} judged earlier"
+            if waiting:
+                text += (f", {waiting} not judged yet (with no ANTHROPIC_API_KEY, ask Claude Code "
+                         "to review them: see README.md)")
+            return text
         text = f"{self.checked} new advert{'' if self.checked == 1 else 's'} checked"
         if self.checked and self.spent is not None:
             text += f" for about ${self.spent:.2f}"

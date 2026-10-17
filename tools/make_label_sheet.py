@@ -19,10 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from job_finder.cli import _set_up_console  # noqa: E402
 from job_finder.config import load_settings  # noqa: E402
+from job_finder.entry_check import latest_jobs  # noqa: E402
 from job_finder.entry_eval import pick_adverts, write_label_sheet  # noqa: E402
-from job_finder.filters import process_jobs  # noqa: E402
 from job_finder.http_client import PoliteClient  # noqa: E402
-from job_finder.sources import ALL_SOURCES  # noqa: E402
 from job_finder.sources.reed import ReedSource  # noqa: E402
 
 
@@ -41,13 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print("Reading the results saved by your last run (no new searches)...")
-    saved = PoliteClient(settings.cache_dir, settings.user_agent, offline=True)
-    collected = []
-    for source_type in ALL_SOURCES:
-        source = source_type(settings, saved)
-        if settings.sources.get(source.key, True):
-            collected.extend(source.run().jobs)
-    jobs, _ = process_jobs(collected, settings, date.today())
+    jobs = latest_jobs(settings, date.today())
     if not jobs:
         print("There are no saved results yet: run find_jobs.py first.")
         return 2

@@ -24,6 +24,7 @@ from job_finder.entry_eval import (
 from job_finder.filters import TAG_ENTRY
 from job_finder.http_client import PoliteClient
 from job_finder.models import VERDICT_ENTRY, VERDICT_NEEDS_EXPERIENCE, VERDICT_UNCLEAR, Job
+from job_finder.review import ReviewError, import_verdicts, write_review_list
 
 TODAY = date(2026, 10, 17)
 NEEDS_THREE_YEARS = {"verdict": "needs_experience", "years_required": 3,
@@ -132,13 +133,34 @@ def test_claude_is_told_when_it_only_sees_the_start_of_an_advert():
     assert "only provides the start" not in advert_text(advert())
 
 
-def test_the_check_needs_turning_on_and_a_key(claude_settings):
+def test_without_a_key_only_saved_verdicts_are_used(claude_settings):
     client = PoliteClient(claude_settings.cache_dir, "test-agent", offline=True)
     keyless = dataclasses.replace(claude_settings, api_keys={})
-    assert check_jobs([advert()], keyless, client, TODAY).startswith(
-        "skipped: add ANTHROPIC_API_KEY")
+    status = check_jobs([advert()], keyless, client, TODAY)
+    assert status.startswith("0 judged earlier, 1 not judged yet")
     off = dataclasses.replace(claude_settings, check_entry_level=False)
     assert check_jobs([advert()], off, client, TODAY) == ""
+
+
+def test_adverts_judged_in_claude_code_count_like_api_answers(claude_settings, tmp_path):
+    saved, folder = tmp_path / "answers.json", tmp_path / "review"
+    jobs = [advert(title="Data Analyst A"), advert(title="Data Analyst B")]
+    reviewer = EntryLevelChecker(claude_settings, None, saved, TODAY)
+    assert write_review_list(jobs, reviewer, folder) == 2
+    assert "## R2" in (folder / "to_review.md").read_text(encoding="utf-8")
+    verdicts = {"R1": {"verdict": "needs_experience", "years": 2, "evidence": "2 years"},
+                "R2": {"verdict": "maybe"}, "R9": {"verdict": "entry_level"}}
+    (folder / "verdicts.json").write_text(json.dumps(verdicts), encoding="utf-8")
+    added, problems = import_verdicts(folder, saved, TODAY)
+    assert added == 1 and len(problems) == 2
+    assert not (folder / "verdicts.json").exists()  # set aside once imported
+    with pytest.raises(ReviewError):
+        import_verdicts(folder, saved, TODAY)  # nothing left to import
+    later = [advert(title="Data Analyst A"), advert(title="Data Analyst B")]
+    status = EntryLevelChecker(claude_settings, None, saved, TODAY).check(later)
+    assert (later[0].claude_verdict, later[0].claude_years) == (VERDICT_NEEDS_EXPERIENCE, 2)
+    assert later[1].claude_verdict == ""
+    assert status.startswith("1 judged earlier, 1 not judged yet")
 
 
 def test_labels_are_read_generously():
@@ -197,7 +219,7 @@ def test_report_lists_each_disagreement():
          "evidence": "Graduate scheme", "title": "Graduate Analyst", "company": "Acme",
          "source": "Adzuna", "url": "https://example.com/2", "excerpt_only": True},
     ]
-    report = render_report(rows, [], "claude-opus-5-5", "low", 0.02)
+    report = render_report(rows, [], 0.02)
     assert "Claude agreed with you on 1 of 2 adverts (50%" in report
     disagreements = report.split("## Where Claude disagreed with you")[1]
     assert "### Junior Analyst (Acme, Reed)" in disagreements
