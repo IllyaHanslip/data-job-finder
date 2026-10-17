@@ -56,3 +56,14 @@ class Job:
     claude_verdict: str = ""
     claude_years: int | None = None
     claude_evidence: str = ""
+    # From the last review in Claude Code (review.py), if it mentioned this job
+    claude_pick: str = ""  # why it's one of the jobs most worth applying for
+    claude_note: str = ""  # a heads-up for the card, e.g. "fees apply"
+
+
+@dataclass
+class Review:
+    """What the last review in Claude Code said about the results as a whole (review.py)."""
+
+    written: date | None = None
+    summary: list[str] = field(default_factory=list)

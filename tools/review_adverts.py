@@ -4,14 +4,16 @@ Run from the project folder, with check_entry_level = true under [claude]:
 
   .venv\Scripts\python.exe tools\review_adverts.py export
       Lists every advert in your latest results that hasn't been judged yet in
-      output/review/to_review.md, each numbered R1, R2, ... Reed adverts are fetched in
-      full first, as the check would see them. No new searches are made.
+      output/review/to_review.md, each numbered R1, R2, ..., then the entry-level jobs
+      judged earlier, numbered C1, C2, ... Reed adverts are fetched in full first, as the
+      check would see them. No new searches are made.
 
   Claude Code then reads that file and writes its verdicts to output/review/verdicts.json,
-  following the instructions at the top of the file.
+  following the instructions at the top of the file. It can add picks, notes and a summary
+  for the "Claude's review" box at the top of the report.
 
   .venv\Scripts\python.exe tools\review_adverts.py import
-      Saves those verdicts, so find_jobs.py shows them from then on
+      Saves all of that, so find_jobs.py shows it from then on
       (run find_jobs.py --offline to rebuild today's report straight away).
 """
 
@@ -28,7 +30,13 @@ from job_finder.cli import _set_up_console  # noqa: E402
 from job_finder.config import load_settings  # noqa: E402
 from job_finder.entry_check import SAVED_FILE, EntryLevelChecker, latest_jobs  # noqa: E402
 from job_finder.http_client import PoliteClient  # noqa: E402
-from job_finder.review import ReviewError, import_verdicts, write_review_list  # noqa: E402
+from job_finder.review import (  # noqa: E402
+    REVIEW_FILE,
+    ImportResult,
+    ReviewError,
+    import_verdicts,
+    write_review_list,
+)
 from job_finder.sources.reed import ReedSource  # noqa: E402
 
 
@@ -45,12 +53,14 @@ def main(argv: list[str] | None = None) -> int:
     today = date.today()
     folder = settings.output_dir / "review"
     saved = settings.cache_dir / SAVED_FILE
+    review_file = settings.cache_dir / REVIEW_FILE
     try:
         if args.action == "import":
-            added, problems = import_verdicts(folder, saved, today)
-            for problem in problems:
+            result = import_verdicts(folder, saved, review_file, today)
+            for problem in result.problems:
                 print(f"Skipped: {problem}")
-            print(f"Saved {added} verdicts. Run find_jobs.py --offline to see them in the report.")
+            print(f"Saved {_saved_text(result)}. Run find_jobs.py --offline to see them in the "
+                  "report.")
             return 0
         jobs = latest_jobs(settings, today)
         if not jobs:
@@ -58,12 +68,26 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         online = PoliteClient(settings.cache_dir, settings.user_agent)
         ReedSource(settings, online).add_full_descriptions(jobs)
-        waiting = write_review_list(jobs, EntryLevelChecker(settings, None, saved, today), folder)
+        checker = EntryLevelChecker(settings, None, saved, today)
+        waiting, earlier = write_review_list(jobs, checker, folder, review_file)
     except ReviewError as exc:
         print(exc)
         return 2
-    print(f"{waiting} of {len(jobs)} adverts need judging: {folder / 'to_review.md'}")
+    print(f"{waiting} of {len(jobs)} adverts need judging, and {earlier} entry-level jobs "
+          f"judged earlier are listed for picks and notes: {folder / 'to_review.md'}")
     return 0
+
+
+def _saved_text(result: ImportResult) -> str:
+    parts = [_count(result.verdicts, "verdict"), _count(result.picks, "pick"),
+             _count(result.notes, "note")]
+    if result.summary:
+        parts.append("the summary")
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _count(number: int, word: str) -> str:
+    return f"{number} {word}{'' if number == 1 else 's'}"
 
 
 if __name__ == "__main__":

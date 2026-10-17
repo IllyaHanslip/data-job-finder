@@ -16,9 +16,18 @@ from job_finder import cli, config
 from job_finder.config import DEFAULT_CONFIG_PATH, ConfigError, load_settings
 from job_finder.filters import TAG_NEEDS_EXPERIENCE, FilterSummary, job_key
 from job_finder.http_client import PoliteClient, Politeness
-from job_finder.models import SCOPE_LOCAL, SECTION_LOCAL, VERDICT_NEEDS_EXPERIENCE, Job
-from job_finder.report import _write_with_fallback, write_reports
+from job_finder.models import (
+    SCOPE_LOCAL,
+    SECTION_LOCAL,
+    VERDICT_ENTRY,
+    VERDICT_NEEDS_EXPERIENCE,
+    Job,
+    Review,
+)
+from job_finder.report import _anchor, _write_with_fallback, write_reports
+from job_finder.review import REVIEW_FILE
 from job_finder.sources.base import JobSource, SourceResult
+from job_finder.storage import write_json
 
 NOW = datetime(2026, 10, 14, 9, 30)
 
@@ -116,6 +125,42 @@ def test_without_an_api_key_the_check_waits_for_a_review(settings):
     turned_on = dataclasses.replace(settings, check_entry_level=True)
     outcome = cli.run(turned_on, offline_client(turned_on), [FakeSource], NOW)
     assert "1 not judged yet" in outcome.claude_status
+    assert 'class="review"' not in outcome.html_path.read_text(encoding="utf-8")
+
+
+def test_report_shows_the_last_review(settings):
+    pick = sample_job(claude_verdict=VERDICT_ENTRY, claude_pick="Near home & <graduates>")
+    course = sample_job(source_id="8", title="Data Analyst Trainee", claude_verdict=VERDICT_ENTRY,
+                        claude_note="Fees apply: a paid course")
+    waiting = sample_job(source_id="9", title="Insight Analyst")
+    review = Review(NOW.date(), ["Few graduate jobs today"])
+    html_path, csv_path = write_reports([pick, course, waiting], [], FilterSummary(), settings,
+                                        NOW, "2 judged earlier", review)
+    page = html_path.read_text(encoding="utf-8")
+    assert "Claude's review" in page and "14 October 2026" in page
+    assert "<li>Few graduate jobs today</li>" in page
+    assert "2 entry level, 0 need experience, 0 can&#x27;t tell" in page
+    assert f'href="#{_anchor(pick)}"' in page and f'id="{_anchor(pick)}"' in page
+    assert "Why it's a pick: Near home &amp; &lt;graduates&gt;" in page
+    assert "Note from Claude: Fees apply: a paid course" in page
+    assert "1 job has not been judged yet" in page
+    with csv_path.open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["Claude's pick"] == "Near home & <graduates>"
+    assert rows[1]["Claude's note"] == "Fees apply: a paid course"
+
+
+def test_a_run_shows_the_review_saved_in_claude_code(settings):
+    turned_on = dataclasses.replace(settings, check_entry_level=True)
+    notes = {job_key(sample_job()): {"pick": "Graduates welcome", "date": "2026-10-14"}}
+    write_json(turned_on.cache_dir / REVIEW_FILE,
+               {"date": "2026-10-14", "summary": ["Quiet day"], "jobs": notes})
+    outcome = cli.run(turned_on, offline_client(turned_on), [FakeSource], NOW)
+    page = outcome.html_path.read_text(encoding="utf-8")
+    assert "<li>Quiet day</li>" in page and "Why it's a pick: Graduates welcome" in page
+    assert "1 job has not been judged yet" in page
+    switched_off = cli.run(settings, offline_client(settings), [FakeSource], NOW)
+    assert "Quiet day" not in switched_off.html_path.read_text(encoding="utf-8")
 
 
 def test_card_links_every_site_a_job_was_found_on(settings):

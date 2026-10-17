@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import html
 import logging
+from collections import Counter
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
@@ -28,6 +30,7 @@ from job_finder.models import (
     VERDICT_NEEDS_EXPERIENCE,
     VERDICT_UNCLEAR,
     Job,
+    Review,
 )
 from job_finder.sources.base import SourceResult
 from job_finder.text import safe_url, shorten, spreadsheet_safe
@@ -42,7 +45,7 @@ CSV_COLUMNS = [
     "Section", "New today", "Title", "Company", "Location", "Work pattern", "Distance (km)",
     "Est. drive (min)", "Salary", "Contract", "Posted", "Source", "Also listed on", "Tags",
     "CV skills matched", "Claude verdict", "Experience asked (years)", "Claude's evidence",
-    "Score", "Link", "Description",
+    "Claude's pick", "Claude's note", "Score", "Link", "Description",
 ]
 CLAUDE_LABELS = {VERDICT_ENTRY: "entry level", VERDICT_NEEDS_EXPERIENCE: "needs experience",
                  VERDICT_UNCLEAR: "can't tell"}
@@ -55,12 +58,13 @@ def write_reports(
     settings: Settings,
     generated_at: datetime,
     claude_status: str = "",
+    review: Review | None = None,
 ) -> tuple[Path, Path]:
     """Write today's HTML and CSV reports and return their paths."""
     out = settings.output_dir
     out.mkdir(parents=True, exist_ok=True)
     stem = f"jobs_{generated_at:%Y-%m-%d}"
-    page = render_html(jobs, results, summary, settings, generated_at, claude_status)
+    page = render_html(jobs, results, summary, settings, generated_at, claude_status, review)
     html_path = _write_with_fallback(
         out / f"{stem}.html", generated_at, lambda path: path.write_text(page, encoding="utf-8")
     )
@@ -110,6 +114,8 @@ def write_csv(jobs: list[Job], path: Path) -> None:
                 CLAUDE_LABELS.get(job.claude_verdict, ""),
                 "" if job.claude_years is None else job.claude_years,
                 spreadsheet_safe(job.claude_evidence),
+                spreadsheet_safe(job.claude_pick),
+                spreadsheet_safe(job.claude_note),
                 job.score,
                 safe_url(job.url),
                 spreadsheet_safe(shorten(job.description, CSV_DESCRIPTION_CHARS)),
@@ -123,6 +129,7 @@ def render_html(
     settings: Settings,
     generated_at: datetime,
     claude_status: str = "",
+    review: Review | None = None,
 ) -> str:
     today = generated_at.date()
     home = settings.home.name
@@ -182,6 +189,7 @@ def render_html(
         "<header>",
         f"<h1>Data &amp; maths jobs: remote or near {_e(home)}</h1>",
         f'<p class="summary">{_e(headline)}</p>',
+        _review_html(review, jobs),
         _sources_html(results, summary, claude_status),
         _APPLICATIONS,
         _controls(with_claude=any(job.claude_verdict for job in jobs)),
@@ -220,6 +228,45 @@ def _sources_html(
     )
 
 
+def _review_html(review: Review | None, jobs: list[Job]) -> str:
+    """The last review in Claude Code: its summary, and its picks linked to their cards."""
+    picks = [job for job in jobs if job.claude_pick]
+    if review is None or not (review.summary or picks):
+        return ""
+    verdicts = Counter(job.claude_verdict for job in jobs)
+    counts = (f"{verdicts[VERDICT_ENTRY]} entry level, {verdicts[VERDICT_NEEDS_EXPERIENCE]} "
+              f"need experience, {verdicts[VERDICT_UNCLEAR]} can't tell")
+    written = f"{review.written.day} {review.written:%B %Y}" if review.written else ""
+    parts = [
+        '<details class="review" open><summary>Claude\'s review'
+        f'<span class="when">{_e(written)}</span></summary>',
+        f'<p class="note">Claude\'s verdicts on this page: {_e(counts)}.</p>',
+    ]
+    if review.summary:
+        parts.append("<ul>" + "".join(f"<li>{_e(point)}</li>" for point in review.summary)
+                     + "</ul>")
+    if picks:
+        items = "".join(
+            f'<li><a class="jump" href="#{_anchor(job)}">{_e(job.title)}</a>'
+            f"{_e(f' · {job.company}' if job.company else '')}: {_e(job.claude_pick)}</li>"
+            for job in picks
+        )
+        parts.append(f'<h3>Picks</h3><ul class="picks">{items}</ul>')
+    waiting = verdicts[""]
+    if waiting:
+        parts.append(
+            f'<p class="note">{waiting} {"job has" if waiting == 1 else "jobs have"} not been '
+            "judged yet: ask Claude Code to “review the new adverts”.</p>"
+        )
+    parts.append("</details>")
+    return "".join(parts)
+
+
+def _anchor(job: Job) -> str:
+    """An id for the job's card that stays the same from run to run, for links to jump to."""
+    return "job-" + hashlib.sha256(job_key(job).encode("utf-8")).hexdigest()[:12]
+
+
 def _section_html(
     key: str,
     heading: str,
@@ -251,6 +298,8 @@ def _site_link(name: str, url: str) -> str:
 def _card(job: Job, today: date) -> str:
     url = safe_url(job.url)
     badges = ['<span class="badge new">New</span>'] if job.is_new else []
+    if job.claude_pick:
+        badges.append("<span class=\"badge pick\">Claude's pick</span>")
     for tag in job.tags:
         style = {TAG_ENTRY: "entry", TAG_SENIOR: "warn", TAG_NEEDS_EXPERIENCE: "warn"}.get(tag, "")
         badges.append(f'<span class="badge {style}">{_e(tag)}</span>')
@@ -267,6 +316,10 @@ def _card(job: Job, today: date) -> str:
     ]
     if job.claude_verdict:
         parts.append(f'<p class="claude">{_e(_claude_line(job))}</p>')
+    if job.claude_pick:
+        parts.append(f"<p class=\"claude-pick\">Why it's a pick: {_e(job.claude_pick)}</p>")
+    if job.claude_note:
+        parts.append(f'<p class="claude-note">Note from Claude: {_e(job.claude_note)}</p>')
     summary = shorten(job.description, SUMMARY_CHARS)
     if summary:
         parts.append(f'<p class="desc">{_e(summary)}</p>')
@@ -298,7 +351,7 @@ def _card(job: Job, today: date) -> str:
         f'data-company="{_e(job.company)}" data-location="{_e(job.location)}" '
         f'data-url="{_e(url)}"'
     )
-    return f'<article class="job" {attributes}>{"".join(parts)}</article>'
+    return f'<article class="job" id="{_anchor(job)}" {attributes}>{"".join(parts)}</article>'
 
 
 def _claude_line(job: Job) -> str:
@@ -383,7 +436,7 @@ _CSS = """
   --bg: #f5f6f8; --card: #ffffff; --text: #1c2330; --muted: #5a6474; --line: #dfe3e8;
   --accent: #1d5fbf; --accent-soft: #e7effb; --new: #0f7a45; --new-soft: #e2f4e9;
   --warn: #8a5300; --warn-soft: #fbf0d9; --tag: #4b5563; --tag-soft: #eceef2;
-  --done: #5b3cc4; --done-soft: #efeafd;
+  --done: #5b3cc4; --done-soft: #efeafd; --pick: #0b6e75; --pick-soft: #dcf1f2;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -391,7 +444,7 @@ _CSS = """
     --bg: #12151a; --card: #1b1f26; --text: #e6e9ee; --muted: #a2abb8; --line: #2b313b;
     --accent: #84b4ff; --accent-soft: #1e2a3c; --new: #66d39b; --new-soft: #16301f;
     --warn: #f0c36c; --warn-soft: #382c14; --tag: #c7ced8; --tag-soft: #2a303a;
-    --done: #b9a4ff; --done-soft: #2a2340;
+    --done: #b9a4ff; --done-soft: #2a2340; --pick: #6fd3d9; --pick-soft: #12302f;
     color-scheme: dark;
   }
 }
@@ -408,6 +461,14 @@ details.sources ul { margin: 6px 0; padding-left: 20px; }
 details.applications { font-size: .9rem; margin: 0 0 12px; }
 details.applications > summary { cursor: pointer; font-weight: 600; }
 details.applications ul { margin: 6px 0; padding-left: 22px; }
+details.review { background: var(--card); border: 1px solid var(--line);
+  border-left: 4px solid var(--pick); border-radius: 10px; padding: 10px 16px;
+  margin: 10px 0 12px; }
+details.review > summary { cursor: pointer; font-weight: 600; }
+details.review .when { margin-left: 8px; font-weight: 400; color: var(--muted);
+  font-size: .88rem; }
+details.review ul { margin: 6px 0; padding-left: 22px; }
+details.review h3 { margin: 10px 0 2px; font-size: .95rem; }
 .controls { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap;
   gap: 8px 18px; align-items: center; padding: 10px 0; background: var(--bg);
   border-bottom: 1px solid var(--line); }
@@ -423,7 +484,7 @@ details.section > summary { cursor: pointer; }
   font-size: .85rem; text-align: center; }
 .note { color: var(--muted); font-size: .9rem; margin: 6px 0 12px; }
 .job { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-  padding: 14px 16px; margin: 10px 0; }
+  padding: 14px 16px; margin: 10px 0; scroll-margin-top: 72px; }
 .job[hidden] { display: none; }
 .job h3 { margin: 0 0 4px; font-size: 1.05rem; line-height: 1.35; }
 .job h3 a { text-decoration: none; }
@@ -435,6 +496,7 @@ details.section > summary { cursor: pointer; }
 .badge.entry { background: var(--accent-soft); color: var(--accent); }
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.applied { background: var(--done-soft); color: var(--done); }
+.badge.pick { background: var(--pick-soft); color: var(--pick); }
 .badge[hidden] { display: none; }
 .meta { margin: 0 0 8px; color: var(--muted); font-size: .88rem; }
 .desc { margin: 0 0 6px; }
@@ -442,6 +504,8 @@ details.section > summary { cursor: pointer; }
 .full { white-space: pre-line; margin-top: 6px; font-size: .92rem; }
 .skills { margin: 6px 0; font-size: .86rem; color: var(--muted); }
 .claude { margin: 0 0 8px; font-size: .88rem; color: var(--muted); }
+.claude-pick { margin: 0 0 8px; font-size: .88rem; color: var(--pick); }
+.claude-note { margin: 0 0 8px; font-size: .88rem; color: var(--warn); }
 .links { margin: 8px 0 0; font-size: .92rem; }
 .apply { font-weight: 600; }
 .also { color: var(--muted); }
@@ -670,6 +734,14 @@ _SCRIPT = """
     });
   boxes.forEach(function (box) { box.addEventListener("change", saveFilters); });
   download.addEventListener("click", downloadList);
+  // A link to a pick opens the folded section the job is in, if need be, before jumping.
+  document.querySelectorAll("a.jump").forEach(function (link) {
+    link.addEventListener("click", function () {
+      for (var el = document.getElementById(link.hash.slice(1)); el; el = el.parentElement) {
+        if (el.tagName === "DETAILS") { el.open = true; }
+      }
+    });
+  });
   window.addEventListener("storage", function (event) {
     if (event.key === STORE && canSave) {
       applied = loadApplied();

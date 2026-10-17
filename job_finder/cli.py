@@ -21,6 +21,7 @@ from job_finder.history import SeenJobs
 from job_finder.http_client import PoliteClient
 from job_finder.models import SECTION_CHECK, SECTION_LOCAL, SECTION_REMOTE, Job
 from job_finder.report import write_reports
+from job_finder.review import REVIEW_FILE, apply_review
 from job_finder.sources import ALL_SOURCES
 from job_finder.sources.base import JobSource, SourceResult
 
@@ -72,13 +73,16 @@ def run(
                     type(exc).__name__)
         log.debug("Details:", exc_info=True)
         claude_status = f"failed unexpectedly ({type(exc).__name__})"
+    # Notes from the last review in Claude Code, if there was one (review.py).
+    review = apply_review(jobs, settings.cache_dir / REVIEW_FILE) if claude_status else None
 
     history = SeenJobs(settings.cache_dir / "seen_jobs.json")
     history.load()
     history.mark(jobs, now.date())
     history.save(now.date())
 
-    html_path, csv_path = write_reports(jobs, results, summary, settings, now, claude_status)
+    html_path, csv_path = write_reports(jobs, results, summary, settings, now, claude_status,
+                                        review)
     return RunResult(jobs, results, summary, html_path, csv_path, claude_status)
 
 

@@ -202,11 +202,8 @@ class EntryLevelChecker:
         text = f"{PROMPT_VERSION}\n{s.claude_model}\n{s.claude_effort}\n{advert_text(job)}"
         return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
-    def check(self, jobs: list[Job]) -> str:
-        """Fill in each job's Claude verdict, asking only about adverts it hasn't seen.
-
-        Returns a one-line status for the report.
-        """
+    def use_saved(self, jobs: list[Job]) -> list[Job]:
+        """Fill in the saved verdicts. Returns the jobs that don't have one yet."""
         todo = []
         for job in jobs:
             answer = self.saved_answer(job)
@@ -214,6 +211,14 @@ class EntryLevelChecker:
                 todo.append(job)
             else:
                 _apply(job, answer)
+        return todo
+
+    def check(self, jobs: list[Job]) -> str:
+        """Fill in each job's Claude verdict, asking only about adverts it hasn't seen.
+
+        Returns a one-line status for the report.
+        """
+        todo = self.use_saved(jobs)
         reused = len(jobs) - len(todo)
         limit = self.settings.max_claude_checks
         waiting = 0

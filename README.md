@@ -112,9 +112,9 @@ Claude can only judge what it can read. Reed's search results carry just the sta
 Claude Code, which comes with Claude's Pro and Max plans, can do the judging in a chat instead, at no API cost:
 
 1. Turn the check on as above (`check_entry_level = true`). No API key is needed.
-2. In Claude Code, ask it to "review the new adverts for entry level". It runs `tools\review_adverts.py export`, reads `output/review/to_review.md`, writes its verdicts to `output/review/verdicts.json`, runs `tools\review_adverts.py import`, then rebuilds the report with `find_jobs.py --offline`.
+2. In Claude Code, ask it to "review the new adverts". It runs `tools\review_adverts.py export`, reads `output/review/to_review.md`, writes its verdicts to `output/review/verdicts.json`, runs `tools\review_adverts.py import`, then rebuilds the report with `find_jobs.py --offline`.
 
-The verdicts are saved like the API's, so each advert is judged once. Adverts nobody has judged yet are counted as "not judged yet" in the report's Sources panel.
+The verdicts are saved like the API's, so each advert is judged once. Claude Code can also leave notes for the report: its picks of the jobs most worth applying for, a heads-up on any job (that it's a paid course, say), and a few points about the results as a whole. They appear in a **Claude's review** box at the top of the report and on the job cards, and stay until the next review. Runs in between work as usual: jobs that arrived since the last review are marked "not judged yet".
 
 ### Measuring how often it agrees with you
 

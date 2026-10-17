@@ -24,7 +24,7 @@ from job_finder.entry_eval import (
 from job_finder.filters import TAG_ENTRY
 from job_finder.http_client import PoliteClient
 from job_finder.models import VERDICT_ENTRY, VERDICT_NEEDS_EXPERIENCE, VERDICT_UNCLEAR, Job
-from job_finder.review import ReviewError, import_verdicts, write_review_list
+from job_finder.review import ReviewError, apply_review, import_verdicts, write_review_list
 
 TODAY = date(2026, 10, 17)
 NEEDS_THREE_YEARS = {"verdict": "needs_experience", "years_required": 3,
@@ -142,25 +142,60 @@ def test_without_a_key_only_saved_verdicts_are_used(claude_settings):
     assert check_jobs([advert()], off, client, TODAY) == ""
 
 
+def review_round(settings, tmp_path, jobs, written):
+    """Export a review list for these jobs, then import what Claude Code `written`."""
+    saved, notes, folder = tmp_path / "answers.json", tmp_path / "notes.json", tmp_path / "review"
+    reviewer = EntryLevelChecker(settings, None, saved, TODAY)
+    listed = write_review_list(jobs, reviewer, folder, notes)
+    (folder / "verdicts.json").write_text(json.dumps(written), encoding="utf-8")
+    return listed, (folder / "to_review.md").read_text(encoding="utf-8"), import_verdicts(
+        folder, saved, notes, TODAY)
+
+
 def test_adverts_judged_in_claude_code_count_like_api_answers(claude_settings, tmp_path):
     saved, folder = tmp_path / "answers.json", tmp_path / "review"
     jobs = [advert(title="Data Analyst A"), advert(title="Data Analyst B")]
-    reviewer = EntryLevelChecker(claude_settings, None, saved, TODAY)
-    assert write_review_list(jobs, reviewer, folder) == 2
-    assert "## R2" in (folder / "to_review.md").read_text(encoding="utf-8")
     verdicts = {"R1": {"verdict": "needs_experience", "years": 2, "evidence": "2 years"},
                 "R2": {"verdict": "maybe"}, "R9": {"verdict": "entry_level"}}
-    (folder / "verdicts.json").write_text(json.dumps(verdicts), encoding="utf-8")
-    added, problems = import_verdicts(folder, saved, TODAY)
-    assert added == 1 and len(problems) == 2
+    listed, review_list, result = review_round(claude_settings, tmp_path, jobs, verdicts)
+    assert listed == (2, 0) and "## R2" in review_list
+    assert result.verdicts == 1 and len(result.problems) == 2
     assert not (folder / "verdicts.json").exists()  # set aside once imported
     with pytest.raises(ReviewError):
-        import_verdicts(folder, saved, TODAY)  # nothing left to import
+        import_verdicts(folder, saved, tmp_path / "notes.json", TODAY)  # nothing left
     later = [advert(title="Data Analyst A"), advert(title="Data Analyst B")]
     status = EntryLevelChecker(claude_settings, None, saved, TODAY).check(later)
     assert (later[0].claude_verdict, later[0].claude_years) == (VERDICT_NEEDS_EXPERIENCE, 2)
     assert later[1].claude_verdict == ""
     assert status.startswith("1 judged earlier, 1 not judged yet")
+
+
+def test_a_review_leaves_picks_notes_and_a_summary(claude_settings, tmp_path):
+    def graduate_job():
+        return advert(title="Graduate Analyst", description="Graduates welcome.")
+
+    review_round(claude_settings, tmp_path, [graduate_job()],
+                 {"R1": {"verdict": "entry_level", "years": 0, "evidence": "Graduates welcome"}})
+    jobs = [graduate_job(), advert(title="Data Analyst B")]
+    written = {"summary": ["Few graduate jobs today", " "],
+               "R1": {"verdict": "needs_experience", "years": 3, "note": "Fees apply"},
+               "C1": {"pick": "Remote, and welcomes graduates"}}
+    listed, review_list, result = review_round(claude_settings, tmp_path, jobs, written)
+    assert listed == (1, 1)  # B is new; the graduate job was judged entry level before
+    assert "## C1" in review_list and "Graduates welcome" in review_list
+    assert (result.verdicts, result.picks, result.notes, result.summary) == (1, 1, 1, True)
+
+    later = [graduate_job(), advert(title="Data Analyst B")]
+    review = apply_review(later, tmp_path / "notes.json")
+    assert (review.written, review.summary) == (TODAY, ["Few graduate jobs today"])
+    assert later[0].claude_pick == "Remote, and welcomes graduates"
+    assert later[1].claude_note == "Fees apply"
+
+    _, review_list, _ = review_round(claude_settings, tmp_path, later, {"C1": {"pick": ""}})
+    assert "Current pick: Remote, and welcomes graduates" in review_list
+    assert "Few graduate jobs today" in review_list  # the summary, to keep or replace
+    apply_review(later, tmp_path / "notes.json")
+    assert later[0].claude_pick == "" and later[1].claude_note == "Fees apply"
 
 
 def test_labels_are_read_generously():
