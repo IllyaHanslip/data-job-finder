@@ -10,7 +10,7 @@ It never scrapes websites. Every request goes to a documented public API, answer
 
 Each run writes two files to `output/`:
 
-- **`jobs_YYYY-MM-DD.html`** opens in your browser. Each job card shows the title, employer, location, remote/hybrid/on-site, a rough distance and drive time, salary, posting date, a description (expandable to the full text), which of your CV skills it mentions, and a link to the original advert to apply. Jobs first seen today are marked **New**, and you can filter by keyword, new jobs only, entry-level only, or hide teaching roles and jobs you've applied for. Boxes you tick stay ticked in later reports. Click **Mark as applied** on a job once you've applied: it gets an **Applied** badge, and **My applications** at the top of the page lists every job you've marked, even after it drops out of the results, with a button to download the list as a spreadsheet. Your marks are stored by the browser: Chrome and Edge keep them from one day's report to the next, but clearing your browsing data deletes them.
+- **`jobs_YYYY-MM-DD.html`** opens in your browser. Each job card shows the title, employer, location, remote/hybrid/on-site, a rough distance and drive time, salary, posting date, a description (expandable to the full text), which of your CV skills it mentions, and a link to the original advert to apply. Jobs first seen today are marked **New**, and you can filter by keyword, new jobs only, entry-level only, or hide teaching roles and jobs you've applied for. Boxes you tick stay ticked in later reports. Click **Mark as applied** on a job once you've applied: it gets an **Applied** badge, and **My applications** at the top of the page lists every job you've marked, even after it drops out of the results, with a button to download the list as a spreadsheet. Your marks are stored by the browser: Chrome and Edge keep them from one day's report to the next, but clearing your browsing data deletes them. With [Claude's check](#optional-claudes-entry-level-check) on, each card also says whether the advert is really entry level, and a **Claude's review** box at the top can list the jobs most worth applying for.
 - **`jobs_YYYY-MM-DD.csv`** contains the same list for Excel or pandas.
 
 Jobs are grouped into three sections:
@@ -83,7 +83,7 @@ A full run takes about eight minutes because requests are deliberately spaced ou
 Everything lives in [`config.toml`](config.toml), and no code changes are needed:
 
 - `[home]`: the place to search around, its coordinates, and the radius in km. This can be anywhere in the UK, but not outside it: Reed only lists UK jobs, and the other searches look for jobs open to UK applicants. To get a town's coordinates, right-click it in Google Maps and click the numbers at the top of the menu to copy them. To keep your own town out of anything you share (on GitHub, for example), put your `[home]` section in a file called `config.local.toml` next to `config.toml` instead: it's listed in `.gitignore`, so it's never uploaded, and anything in it replaces the same setting in `config.toml`.
-- `[search]`: the phrases searched near home and UK-wide, the maximum advert age, and whether to include senior roles.
+- `[search]`: the phrases searched near home and UK-wide (by default, data, maths and AI roles), the maximum advert age, and whether to include senior roles. Each phrase is one request to each site per run, so more phrases make runs longer.
 - `[filters]`: the words a job title must contain, words that rule a job out, words marking senior or entry-level roles, and the CV skills to look for in adverts. A trailing `*` matches any ending (`statistic*` matches statistician and statistical).
 - `[sources]`: turn any site on or off.
 - `[report]`: which browser opens the report: Chrome, or your computer's default browser.
@@ -91,7 +91,7 @@ Everything lives in [`config.toml`](config.toml), and no code changes are needed
 
 ## Optional: Claude's entry-level check
 
-A title can mislead: a "Junior Data Analyst" advert sometimes asks for two years' experience. With this check on, each kept advert is judged by Claude, Anthropic's AI model, either automatically through Anthropic's paid API or in a Claude Code chat (see below). Claude answers whether the advert is really entry level, how many years of experience it asks for, and the words that decided it. Each job card shows the answer. Adverts that need experience lose their **Entry level** badge, move down the list, and can be hidden with a checkbox, and the spreadsheet gets three extra columns.
+A title can mislead: a "Junior Data Analyst" advert sometimes asks for two years' experience. With this check on, each kept advert is judged by Claude, Anthropic's AI model, either automatically through Anthropic's paid API or in a Claude Code chat (see below). Claude answers whether the advert is really entry level, how many years of experience it asks for, and the words that decided it. Each job card shows the answer. Adverts that need experience lose their **Entry level** badge, move down the list, and can be hidden with a checkbox. The spreadsheet has the same verdicts, plus any picks and notes from a review in Claude Code (below).
 
 To have it run automatically through the API:
 
@@ -114,7 +114,7 @@ Claude Code, which comes with Claude's Pro and Max plans, can do the judging in 
 1. Turn the check on as above (`check_entry_level = true`). No API key is needed.
 2. In Claude Code, ask it to "review the new adverts". It runs `tools\review_adverts.py export`, reads `output/review/to_review.md`, writes its verdicts to `output/review/verdicts.json`, runs `tools\review_adverts.py import`, then rebuilds the report with `find_jobs.py --offline`.
 
-The verdicts are saved like the API's, so each advert is judged once. Claude Code can also leave notes for the report: its picks of the jobs most worth applying for, a heads-up on any job (that it's a paid course, say), and a few points about the results as a whole. They appear in a **Claude's review** box at the top of the report and on the job cards, and stay until the next review. Runs in between work as usual: jobs that arrived since the last review are marked "not judged yet".
+The verdicts are saved like the API's, so each advert is judged once. Claude Code can also leave notes for the report: its picks of the jobs most worth applying for, a heads-up on any job (that it's a paid course, say), and a few points about the results as a whole. They appear in a **Claude's review** box at the top of the report and on the job cards, and stay until the next review. Runs in between work as usual, and the box counts the jobs that have arrived since and haven't been judged yet.
 
 ### Measuring how often it agrees with you
 
@@ -134,16 +134,17 @@ flowchart LR
     D --> E[Filters: topic, seniority, age, open to UK]
     E --> F[Duplicates merged]
     F --> G[Labels: remote/hybrid, distance, CV skills, score]
-    G --> H[HTML report + CSV]
+    G --> I["Claude's verdicts and review (optional)"]
+    I --> H[HTML report + CSV]
 ```
 
 1. **Settings** are read from `config.toml`, and API keys from `.env` (`job_finder/config.py`).
 2. **Each source** (`job_finder/sources/`) builds its list of searches. For example, Adzuna searches each phrase within 55 km of home, then UK-wide with "remote" added.
 3. **Every request goes through `PoliteClient`** (`job_finder/http_client.py`). It returns a saved answer if one is recent enough, otherwise waits its turn, checks the daily budget, sends the request and saves the answer.
 4. **Each answer is parsed** into a common `Job` record (`job_finder/models.py`), with HTML stripped from descriptions and dates and salaries normalised (`job_finder/text.py`).
-5. **Filtering** (`job_finder/filters.py`) drops adverts that are too old, remote jobs not open to the UK, titles outside data and maths, excluded job types (IT support, security, recruiters) and senior roles. The same job listed on two sites is merged.
+5. **Filtering** (`job_finder/filters.py`) drops adverts that are too old, remote jobs not open to the UK, titles outside data, maths and AI, excluded job types (IT support, security, recruiters) and senior roles. The same job listed on two sites is merged.
 6. **Labelling** works out whether each job is remote, hybrid or on-site from the advert's wording. It estimates the distance from home using the job's coordinates, or a built-in list of about 4,300 UK towns and cities (`job_finder/uk_places.tsv`), places the job in a section, notes which CV skills it mentions, and scores it for ordering.
-7. **Claude's check** (optional, `job_finder/entry_check.py`) asks Claude whether each advert is really entry level and adjusts its badge and ranking.
+7. **Claude's check** (optional, `job_finder/entry_check.py`) asks Claude whether each advert is really entry level and adjusts its badge and ranking. A review in Claude Code (`job_finder/review.py`) can also add picks and notes, shown in the report's Claude's review box.
 8. **History** (`job_finder/history.py`) remembers when each job was first seen, so new ones get a badge.
 9. **Reports** are written by `job_finder/report.py`. All text from adverts is escaped, so a malicious advert can't inject code into the page, and CSV cells are protected against spreadsheet formula injection.
 
@@ -161,7 +162,7 @@ job_finder/
   cli.py                runs everything and prints the summary
   config.py             loads config.toml and .env
   http_client.py        caching, rate limiting and error handling for every request
-  models.py             the Job record
+  models.py             the Job and Review records
   sources/              one module per job API, plus shared base class
   filters.py            relevance, seniority, remote detection, de-duplication, ranking
   entry_check.py        the optional Claude entry-level check
