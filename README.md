@@ -1,5 +1,7 @@
 # Data Job Finder
 
+[![CI](https://github.com/IllyaHanslip/data-job-finder/actions/workflows/ci.yml/badge.svg)](https://github.com/IllyaHanslip/data-job-finder/actions/workflows/ci.yml)
+
 Built with [Claude Code](https://claude.com/claude-code).
 
 A Python tool that searches official job APIs for **entry-level data science, AI, statistics and maths roles** that are either **remote and open to UK applicants** or **within about an hour's drive of home** (anywhere in the UK). It writes the results to an HTML page you can filter and a CSV file for Excel.
@@ -158,6 +160,7 @@ find_jobs.bat           double-click launcher for Windows
 config.toml             search settings
 config.local.toml       your own settings, such as your town (optional; never uploaded)
 .env.example            template for your API keys (copy to .env)
+.github/workflows/      CI: lint and tests on every push (GitHub Actions)
 job_finder/
   cli.py                runs everything and prints the summary
   config.py             loads config.toml and .env
@@ -188,7 +191,7 @@ tools/                  build_uk_places.py rebuilds uk_places.tsv from GeoNames 
 .venv\Scripts\python.exe -m ruff check .
 ```
 
-The tests use canned API answers, so they never touch the network.
+The tests use canned API answers, so they never touch the network. GitHub runs the same checks on every push and pull request, on Windows and Linux with Python 3.11 and 3.12 (`.github/workflows/ci.yml`); the badge at the top shows the latest result.
 
 ## Notes
 
