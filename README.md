@@ -118,14 +118,6 @@ Claude Code, which comes with Claude's Pro and Max plans, can do the judging in 
 
 The verdicts are saved like the API's, so each advert is judged once. Claude Code can also leave notes for the report: its picks of the jobs most worth applying for, a heads-up on any job (that it's a paid course, say), and a few points about the results as a whole. They appear in a **Claude's review** box at the top of the report and on the job cards, and stay until the next review. Runs in between work as usual, and the box counts the jobs that have arrived since and haven't been judged yet.
 
-### Measuring how often it agrees with you
-
-1. Run `.venv\Scripts\python.exe tools\make_label_sheet.py`. It picks 50 adverts from your latest results and writes `output/eval/labels.csv`, plus `adverts.md` with each advert's text. Nothing is sent to Claude.
-2. Open each advert's link, read the whole advert, and type `entry`, `experienced` or `unclear` in the `your_label` column.
-3. Run `.venv\Scripts\python.exe tools\evaluate_entry_check.py`. Adverts already judged, through the API or in Claude Code, cost nothing. With an API key, it says how many others it would send and roughly what that costs; add `--yes` to go ahead. It writes `output/eval/report.md`: how often Claude agrees with you, how many of the adverts you marked experienced it caught, how often its warnings were right, how full adverts compare with Adzuna's snippets, and every disagreement with Claude's reason.
-
-The labelled adverts stay in `output/`, which is never uploaded, because the listings belong to the job sites.
-
 ## How it works
 
 ```mermaid
