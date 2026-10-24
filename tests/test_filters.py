@@ -167,6 +167,27 @@ def test_jobs_are_grouped_into_sections(settings):
     assert coventry.drive_minutes is not None and coventry.drive_minutes < 40
 
 
+def test_remote_board_jobs_that_want_office_days_are_not_called_remote(settings):
+    adverts = {
+        "Data Scientist": "Hybrid working: 4 days in our Central London office and 1 from home.",
+        "Data Analyst": "Data Analyst - Hybrid in London, United Kingdom.",
+        "Credit Analyst": "One day per week in office requirement.",
+        "Quant Analyst": "Remote working within the UK. Hybrid working policy with flexible "
+                         "arrangements. We meet 3 days in the office each quarter.",
+    }
+    jobs = [make_job(title=title, company=f"{title} Co", source_id=title, description=text,
+                     scope=SCOPE_REMOTE_BOARD, remote_regions="UK", location="Remote (UK)")
+            for title, text in adverts.items()]
+    kept, _ = process_jobs(jobs, settings, TODAY)
+    modes = {job.title: (job.work_mode, job.section) for job in kept}
+    assert modes == {
+        "Data Scientist": (WORK_HYBRID, SECTION_CHECK),
+        "Data Analyst": (WORK_HYBRID, SECTION_CHECK),
+        "Credit Analyst": (WORK_HYBRID, SECTION_CHECK),
+        "Quant Analyst": (WORK_REMOTE, SECTION_REMOTE),  # a policy and rare visits don't count
+    }
+
+
 def test_a_far_away_namesake_does_not_move_a_local_job(settings):
     # Reed gives no coordinates. Its radius search only finds jobs near home, so a "Truro"
     # (over 300 km from home) from that search must be another place, and its distance is

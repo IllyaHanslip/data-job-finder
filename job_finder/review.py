@@ -79,8 +79,10 @@ def write_review_list(
                           "list numbers the adverts afresh.")
     todo = checker.use_saved(jobs)
     apply_claude_verdicts(jobs, checker.today)  # so the list matches "Entry level only"
-    earlier = [job for job in jobs if job.claude_verdict and TAG_ENTRY in job.tags]
     review = apply_review(jobs, review_path)  # shows the current picks and notes in the list
+    # Picked jobs are always listed, so a pick can be corrected or removed whatever its verdict.
+    earlier = [job for job in jobs
+               if job.claude_verdict and (TAG_ENTRY in job.tags or job.claude_pick)]
     numbered = [(f"R{n}", job) for n, job in enumerate(todo, start=1)]
     numbered += [(f"C{n}", job) for n, job in enumerate(earlier, start=1)]
     with (folder / "to_review.jsonl").open("w", encoding="utf-8") as handle:
@@ -91,7 +93,8 @@ def write_review_list(
     for review_id, job in numbered[:len(todo)]:
         lines += [f"## {review_id}", "", _wrap(advert_text(job)), ""]
     lines += ["# Entry-level jobs judged earlier", "",
-              "These already have a verdict. Give any of them a pick or a note, or a new verdict."]
+              "These already have a verdict (picked jobs are listed whatever their verdict). "
+              "Give any of them a pick or a note, or a new verdict."]
     if review.summary:
         written = review.written.isoformat() if review.written else "an earlier review"
         lines += ["", f"The summary from {written}, to keep or replace:"]

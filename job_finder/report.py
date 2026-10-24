@@ -18,6 +18,7 @@ from job_finder.filters import (
     TAG_SENIOR,
     TAG_TEACHING,
     WORK_NOT_STATED,
+    WORK_REMOTE,
     FilterSummary,
     job_key,
 )
@@ -370,7 +371,7 @@ def _claude_line(job: Job) -> str:
 def _meta_line(job: Job, today: date) -> str:
     parts = [job.company] if job.company else []
     parts.append(job.location or "Location not given")
-    if job.scope != SCOPE_REMOTE_BOARD:
+    if job.scope != SCOPE_REMOTE_BOARD or job.work_mode != WORK_REMOTE:
         stated = job.work_mode != WORK_NOT_STATED
         parts.append(job.work_mode if stated else "Work pattern not stated")
     if job.distance_km is not None and job.drive_minutes is not None:

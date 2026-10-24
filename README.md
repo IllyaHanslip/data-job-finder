@@ -19,7 +19,7 @@ Jobs are grouped into three sections:
 
 1. **Remote, open to UK applicants**: remote-only job boards, plus UK adverts that mention remote or home working.
 2. **Within about an hour of home**: on-site, hybrid or unspecified roles within 55 km (about 34 miles) in a straight line.
-3. **Worth a quick check** (collapsed): adverts that mention remote somewhere but look hybrid or office-based further away.
+3. **Worth a quick check** (collapsed): adverts that mention remote somewhere but look hybrid or office-based further away, including remote-board jobs whose adverts ask for regular office days.
 
 Within each section, entry-level roles and adverts mentioning more of your CV skills are listed first.
 

@@ -56,6 +56,16 @@ _REMOTE = re.compile(
     r"work from anywhere)\b",
     re.IGNORECASE,
 )
+# Remote job boards label some jobs "Remote" that want regular office days ("4 days in our
+# London office", "Hybrid in London"). Occasional visits ("3 days in the office each quarter")
+# and a general hybrid policy don't count.
+_DAYS = r"(?:[1-5]|[Oo]ne|[Tt]wo|[Tt]hree|[Ff]our|[Ff]ive)\s+days?"
+_OFFICE = r"(?:in|at)\s+(?:the\s+|our\s+|an?\s+)?(?:[A-Z][\w\-]*\s+){0,3}office"
+_OFFICE_DAYS = re.compile(
+    rf"\b{_DAYS}\s+(?:a|per|each)\s+week\s+{_OFFICE}"
+    rf"|\b{_DAYS}\s+{_OFFICE}(?!\s+(?:a|each|every|per)\s+(?:month|quarter|year))"
+    r"|\b[Hh]ybrid,?\s+in\s+(?:our\s+|the\s+)?[A-Z][a-z]+"
+)
 _UK_FRIENDLY = re.compile(
     r"\b(?:uk|u\.k|united kingdom|great britain|britain|england|scotland|wales|"
     r"europe|european|eu|emea|worldwide|world wide|anywhere|global|globally|"
@@ -184,7 +194,7 @@ def enrich(job: Job, rules: Rules, settings: Settings, today: date) -> None:
     """Fill in work pattern, distance, report section, tags, CV matches and score."""
     home = settings.home
     if job.scope == SCOPE_REMOTE_BOARD:
-        job.work_mode = WORK_REMOTE
+        job.work_mode = WORK_HYBRID if _OFFICE_DAYS.search(job.description) else WORK_REMOTE
     else:
         job.work_mode = detect_work_mode(f"{job.title}\n{job.location}\n{job.description}")
         km: float | None = None

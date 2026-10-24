@@ -191,6 +191,16 @@ def test_a_review_leaves_picks_notes_and_a_summary(claude_settings, tmp_path):
     assert later[0].claude_pick == "Remote, and welcomes graduates"
     assert later[1].claude_note == "Fees apply"
 
+    def snippet_job():  # no entry-level badge, and judged "can't tell" below
+        return advert(title="Statistician", description="Only a snippet.", tags=[])
+
+    review_round(claude_settings, tmp_path, [snippet_job()],
+                 {"R1": {"verdict": "unclear", "pick": "Near home"}})
+    listed, review_list, _ = review_round(claude_settings, tmp_path,
+                                          [snippet_job(), graduate_job()], {})
+    assert listed == (0, 2)  # a picked job is listed for correction whatever its verdict
+    assert "Current pick: Near home" in review_list
+
     _, review_list, _ = review_round(claude_settings, tmp_path, later, {"C1": {"pick": ""}})
     assert "Current pick: Remote, and welcomes graduates" in review_list
     assert "Few graduate jobs today" in review_list  # the summary, to keep or replace
@@ -254,8 +264,11 @@ def test_report_lists_each_disagreement():
          "evidence": "Graduate scheme", "title": "Graduate Analyst", "company": "Acme",
          "source": "Adzuna", "url": "https://example.com/2", "excerpt_only": True},
     ]
+    rows[0]["model"], rows[1]["model"] = "claude-code-review", "claude-opus-5-5"
     report = render_report(rows, [], 0.02)
     assert "Claude agreed with you on 1 of 2 adverts (50%" in report
+    assert ("Answers from a review in a Claude Code chat (not the API check), claude-opus-5-5"
+            in report)  # says which route produced the verdicts being measured
     disagreements = report.split("## Where Claude disagreed with you")[1]
     assert "### Junior Analyst (Acme, Reed)" in disagreements
     assert "Graduate Analyst" not in disagreements

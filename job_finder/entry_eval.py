@@ -21,6 +21,8 @@ from job_finder.models import VERDICT_ENTRY, VERDICT_NEEDS_EXPERIENCE, VERDICT_U
 from job_finder.text import spreadsheet_safe
 
 LABEL_COLUMNS = ["id", "title", "company", "source", "claude_sees", "link", "your_label", "notes"]
+# How the report names where verdicts came from ("claude-code-review" is review.REVIEWER).
+SOURCE_NAMES = {"claude-code-review": "a review in a Claude Code chat (not the API check)"}
 LABEL_NAMES = {VERDICT_ENTRY: "entry", VERDICT_NEEDS_EXPERIENCE: "experienced",
                VERDICT_UNCLEAR: "unclear"}
 _LABEL_WORDS = {
@@ -151,7 +153,8 @@ def render_report(rows: list[dict[str, Any]], errors: list[dict[str, Any]],
     measures = score(rows)
     agree, total = measures["agreement"]
     low, high = wilson(agree, total)
-    answered_by = ", ".join(sorted({str(row["model"]) for row in rows if row.get("model")}))
+    answered_by = ", ".join(sorted({SOURCE_NAMES.get(str(row["model"]), str(row["model"]))
+                                    for row in rows if row.get("model")}))
     cost = "unknown" if spent is None else (f"about ${spent:.2f}" if spent else "nothing")
     lines = [
         "# How often Claude agrees with you",
