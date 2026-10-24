@@ -161,7 +161,6 @@ job_finder/
   sources/              one module per job API, plus shared base class
   filters.py            relevance, seniority, remote detection, de-duplication, ranking
   entry_check.py        the optional Claude entry-level check
-  entry_eval.py         measuring that check against your own labels
   review.py             judging adverts in a Claude Code chat instead of the API
   geo.py                distances and drive-time estimates
   uk_places.tsv         UK towns and cities used for distances (from GeoNames)
@@ -171,8 +170,7 @@ job_finder/
   storage.py            safe JSON file writing
 tests/                  pytest suite with canned API answers (no network)
 tools/                  build_uk_places.py rebuilds uk_places.tsv from GeoNames data;
-                        review_adverts.py hands adverts to Claude Code for judging;
-                        make_label_sheet.py and evaluate_entry_check.py measure the verdicts
+                        review_adverts.py hands adverts to Claude Code for judging
 ```
 
 ## Running the tests

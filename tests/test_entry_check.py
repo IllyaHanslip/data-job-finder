@@ -1,8 +1,7 @@
-"""Claude's entry-level check and its evaluation, with a fake Claude (no network, no cost)."""
+"""Claude's entry-level check and reviews in Claude Code, with a fake Claude (no network)."""
 
 from __future__ import annotations
 
-import csv
 import dataclasses
 import json
 from datetime import date
@@ -11,19 +10,9 @@ from types import SimpleNamespace
 import pytest
 
 from job_finder.entry_check import EntryLevelChecker, advert_text, check_jobs
-from job_finder.entry_eval import (
-    job_from_case,
-    load_cases,
-    normalise_label,
-    pick_adverts,
-    render_report,
-    score,
-    wilson,
-    write_label_sheet,
-)
 from job_finder.filters import TAG_ENTRY
 from job_finder.http_client import PoliteClient
-from job_finder.models import VERDICT_ENTRY, VERDICT_NEEDS_EXPERIENCE, VERDICT_UNCLEAR, Job
+from job_finder.models import VERDICT_NEEDS_EXPERIENCE, Job
 from job_finder.review import ReviewError, apply_review, import_verdicts, write_review_list
 
 TODAY = date(2026, 10, 17)
@@ -207,68 +196,3 @@ def test_a_review_leaves_picks_notes_and_a_summary(claude_settings, tmp_path):
     apply_review(later, tmp_path / "notes.json")
     assert later[0].claude_pick == "" and later[1].claude_note == "Fees apply"
 
-
-def test_labels_are_read_generously():
-    assert normalise_label(" Entry ") == VERDICT_ENTRY
-    assert normalise_label("entry-level") == VERDICT_ENTRY
-    assert normalise_label("Experienced") == VERDICT_NEEDS_EXPERIENCE
-    assert normalise_label("?") == VERDICT_UNCLEAR
-    assert normalise_label("maybe") is None
-
-
-def test_scores_count_agreement_and_catches():
-    rows = [
-        {"label": VERDICT_NEEDS_EXPERIENCE, "verdict": VERDICT_NEEDS_EXPERIENCE},
-        {"label": VERDICT_NEEDS_EXPERIENCE, "verdict": VERDICT_UNCLEAR},
-        {"label": VERDICT_ENTRY, "verdict": VERDICT_ENTRY},
-        {"label": VERDICT_ENTRY, "verdict": VERDICT_NEEDS_EXPERIENCE},
-    ]
-    measures = score(rows)
-    assert measures["agreement"] == (2, 4)
-    assert measures["recall"] == (1, 2)
-    assert measures["precision"] == (1, 2)
-    assert measures["specificity"] == (1, 2)
-    assert measures["unclear"] == (1, 4)
-    low, high = wilson(2, 4)
-    assert 0 < low < 0.5 < high < 1
-
-
-def test_label_sheet_round_trip(tmp_path):
-    sources = ["Reed", "Adzuna", "Himalayas"] * 3
-    jobs = [advert(title=f"Data Analyst {n}", source=source, tags=[TAG_ENTRY] if n % 2 else [])
-            for n, source in enumerate(sources)]
-    picked = pick_adverts(jobs, 4)
-    assert picked == pick_adverts(jobs, 4)  # the same pick every time
-    assert len({job.source for job in picked}) >= 2
-    write_label_sheet(picked, tmp_path)
-    sheet = tmp_path / "labels.csv"
-    with sheet.open(encoding="utf-8-sig", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    rows[0]["your_label"], rows[1]["your_label"] = "experienced", "nonsense"
-    with sheet.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
-    cases, problems = load_cases(tmp_path)
-    assert [case["label"] for case in cases] == [VERDICT_NEEDS_EXPERIENCE]
-    assert len(problems) == 1 and "nonsense" in problems[0]
-    assert job_from_case(cases[0]).description == picked[0].description
-
-
-def test_report_lists_each_disagreement():
-    rows = [
-        {"label": VERDICT_ENTRY, "verdict": VERDICT_NEEDS_EXPERIENCE, "years": 2,
-         "evidence": "at least 2 years", "title": "Junior Analyst", "company": "Acme",
-         "source": "Reed", "url": "https://example.com/1", "excerpt_only": False},
-        {"label": VERDICT_ENTRY, "verdict": VERDICT_ENTRY, "years": 0,
-         "evidence": "Graduate scheme", "title": "Graduate Analyst", "company": "Acme",
-         "source": "Adzuna", "url": "https://example.com/2", "excerpt_only": True},
-    ]
-    rows[0]["model"], rows[1]["model"] = "claude-code-review", "claude-opus-5-5"
-    report = render_report(rows, [], 0.02)
-    assert "Claude agreed with you on 1 of 2 adverts (50%" in report
-    assert ("Answers from a review in a Claude Code chat (not the API check), claude-opus-5-5"
-            in report)  # says which route produced the verdicts being measured
-    disagreements = report.split("## Where Claude disagreed with you")[1]
-    assert "### Junior Analyst (Acme, Reed)" in disagreements
-    assert "Graduate Analyst" not in disagreements

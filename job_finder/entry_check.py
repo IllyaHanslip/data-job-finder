@@ -153,15 +153,6 @@ def advert_text(job: Job) -> str:
     return "<advert>\n" + "\n".join(details) + f"\n\n{text}\n</advert>"
 
 
-def estimate_cost(jobs: list[Job], model: str) -> float | None:
-    """A rough figure before any request: about 4 characters per token in, 400 tokens out."""
-    prices = PRICES.get(model)
-    if prices is None:
-        return None
-    tokens_in = sum((len(SYSTEM_PROMPT) + len(advert_text(job))) / 4 for job in jobs)
-    return (tokens_in * prices[0] + 400 * len(jobs) * prices[1]) / 1_000_000
-
-
 class EntryLevelChecker:
     """Checks adverts with Claude and keeps the answers.
 
