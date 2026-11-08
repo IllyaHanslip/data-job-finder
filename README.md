@@ -32,6 +32,7 @@ Within each section, entry-level roles and adverts mentioning more of your CV sk
 | [Himalayas](https://himalayas.app/docs/remote-jobs-api) | Remote jobs open to UK residents, entry and mid level | None | Data refreshes daily, so answers are reused for 24 h. At most 50 searches a day, at least 5 s apart |
 | [Remotive](https://github.com/remotive-com/remote-jobs-api) | Remote data, analytics and AI jobs | None | Asks for at most 4 calls a day: 2 calls per run (one per category), at most 4 a day |
 | [Jobicy](https://jobicy.com/jobs-rss-feed) | Remote data science jobs | None | Asks for at most one pass an hour: answers reused for 6 h |
+| [Arbeitnow](https://www.arbeitnow.com/blog/job-board-api) | UK jobs taken from employers' own job pages (many London tech and AI firms) | None | A free API that asks not to be abused. It has no keyword search, so each run reads the newest 10 pages (about the last two or three days), at least 3 s apart, at most 30 requests a day, answers reused for 12 h |
 
 The tool also:
 
@@ -59,7 +60,7 @@ Then open `.env` in a text editor and paste in your API keys:
 - **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, under half of one full run with the default settings (55 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
 - **Reed** (free): register at <https://www.reed.co.uk/developers/jobseeker> and copy the API key.
 
-Without keys the tool still runs, but it only searches the three remote job boards. The "near home" search needs Adzuna and/or Reed. Reed alone is enough, but Adzuna finds many local adverts that Reed doesn't.
+Without keys the tool still runs, but it only searches the three remote job boards and Arbeitnow's UK feed. The "near home" search needs Adzuna and/or Reed. Reed alone is enough, but Adzuna finds many local adverts that Reed doesn't.
 
 On macOS or Linux, use `python3 -m venv .venv`, then `.venv/bin/python` in place of `.venv\Scripts\python.exe`, and `cp` in place of `copy`.
 
@@ -187,11 +188,11 @@ The tests use canned API answers, so they never touch the network. GitHub runs t
 
 - Keyword matching is simple and transparent rather than clever. Read each advert before applying.
 - Remotive delays its listings by 24 hours, and Himalayas updates once a day.
-- Job data belongs to the sites above. Each listing links to the site it came from, and any other site it was also found on is named and linked, as the Himalayas, Remotive and Jobicy rules ask.
+- Job data belongs to the sites above. Each listing links to the site it came from, and any other site it was also found on is named and linked, as the Himalayas, Remotive, Jobicy and Arbeitnow rules ask.
 
 ## Terms and licence
 
-- This is a personal tool for your own job search. It uses each site's official API (with your own keys for Adzuna and Reed), so each site's terms apply to you: [Adzuna](https://developer.adzuna.com/docs/terms_of_service), [Himalayas](https://himalayas.app/docs/remote-jobs-api), [Remotive](https://github.com/remotive-com/remote-jobs-api), [Jobicy](https://jobicy.com/jobs-rss-feed) and [Reed](https://www.reed.co.uk/policies).
+- This is a personal tool for your own job search. It uses each site's official API (with your own keys for Adzuna and Reed), so each site's terms apply to you: [Adzuna](https://developer.adzuna.com/docs/terms_of_service), [Himalayas](https://himalayas.app/docs/remote-jobs-api), [Remotive](https://github.com/remotive-com/remote-jobs-api), [Jobicy](https://jobicy.com/jobs-rss-feed), [Arbeitnow](https://www.arbeitnow.com) and [Reed](https://www.reed.co.uk/policies).
 - Keep the generated reports to yourself and don't pass the listings on to other job sites: Himalayas and Remotive forbid passing their jobs on, and Adzuna has separate rules for publishing its adverts.
-- Not affiliated with, or endorsed by, Adzuna, Reed, Himalayas, Remotive or Jobicy.
+- Not affiliated with, or endorsed by, Adzuna, Reed, Himalayas, Remotive, Jobicy or Arbeitnow.
 - The code is released under the [MIT licence](LICENSE). The town list (`job_finder/uk_places.tsv`) is made from [GeoNames](https://www.geonames.org) data and stays under the [CC BY 4.0 licence](https://creativecommons.org/licenses/by/4.0/).

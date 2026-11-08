@@ -156,6 +156,7 @@ reed = true
 himalayas = true
 remotive = true
 jobicy = true
+arbeitnow = true
 
 [report]
 # Browser that opens the report when a run finishes: "chrome", or "default" for your

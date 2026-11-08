@@ -1,6 +1,7 @@
 """Every job source, in the order they are searched."""
 
 from job_finder.sources.adzuna import AdzunaSource
+from job_finder.sources.arbeitnow import ArbeitnowSource
 from job_finder.sources.base import JobSource, SearchRequest, SourceResult
 from job_finder.sources.himalayas import HimalayasSource
 from job_finder.sources.jobicy import JobicySource
@@ -13,11 +14,13 @@ ALL_SOURCES: list[type[JobSource]] = [
     HimalayasSource,
     RemotiveSource,
     JobicySource,
+    ArbeitnowSource,
 ]
 
 __all__ = [
     "ALL_SOURCES",
     "AdzunaSource",
+    "ArbeitnowSource",
     "HimalayasSource",
     "JobSource",
     "JobicySource",

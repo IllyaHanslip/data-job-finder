@@ -426,7 +426,8 @@ Download as spreadsheet</button></p>
 _FOOTER = (
     'Listings come from the official APIs of <a href="https://www.adzuna.co.uk">Adzuna</a>, '
     '<a href="https://www.reed.co.uk">Reed</a>, <a href="https://himalayas.app">Himalayas</a>, '
-    '<a href="https://remotive.com">Remotive</a> and <a href="https://jobicy.com">Jobicy</a>, '
+    '<a href="https://remotive.com">Remotive</a>, <a href="https://jobicy.com">Jobicy</a> and '
+    '<a href="https://www.arbeitnow.co.uk">Arbeitnow</a>, '
     "and every job links to the site it came from. This tool is not affiliated with or "
     "endorsed by any of them. Distances are straight-line and drive times are rough "
     "estimates, so check a route planner before applying."

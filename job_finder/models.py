@@ -7,7 +7,8 @@ from datetime import date
 
 # How a listing was found. This decides how its location is read later on.
 SCOPE_LOCAL = "local"  # radius search around home (Adzuna, Reed)
-SCOPE_UK_REMOTE = "uk-remote"  # UK-wide search with "remote" in the keywords (Adzuna, Reed)
+SCOPE_UK_REMOTE = "uk-remote"  # UK-wide: a search with "remote" added (Adzuna, Reed) or a feed
+# of UK jobs (Arbeitnow). Remote, hybrid or on-site is read from the advert's wording.
 SCOPE_REMOTE_BOARD = "remote-board"  # remote-only job board (Himalayas, Remotive, Jobicy)
 
 # The three groups shown in the report, in display order.

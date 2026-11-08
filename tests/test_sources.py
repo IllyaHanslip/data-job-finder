@@ -10,6 +10,7 @@ from job_finder.http_client import FetchError, StopSource
 from job_finder.models import SCOPE_LOCAL, SCOPE_REMOTE_BOARD, SCOPE_UK_REMOTE
 from job_finder.sources import (
     AdzunaSource,
+    ArbeitnowSource,
     HimalayasSource,
     JobicySource,
     ReedSource,
@@ -315,3 +316,37 @@ def test_unexpected_answers_do_not_crash(settings, fake_client):
     assert RemotiveSource(settings, fake_client([odd])).run().jobs == []
     assert RemotiveSource(settings, fake_client([])).extract_items(None) == []
     assert RemotiveSource(settings, fake_client([])).extract_items({"jobs": "oops"}) == []
+
+
+ARBEITNOW_ANSWER = {
+    "data": [
+        {"slug": "data-analyst-1", "company_name": "Acme &amp; Co", "title": "Data Analyst",
+         "description": "<p>Join us in London. Hybrid: 2 days a week in the office.</p>",
+         "remote": False, "url": "https://www.arbeitnow.co.uk/jobs/companies/acme/data-analyst-1",
+         "tags": ["Data"], "job_types": ["Full Time"], "location": "London",
+         "created_at": 1794099321},
+        {"slug": "ml-engineer-2", "company_name": "Faraway", "title": "ML Engineer",
+         "description": "<p>Based in our US offices.</p>", "remote": False,
+         "url": "https://www.arbeitnow.co.uk/jobs/companies/faraway/ml-engineer-2",
+         "tags": [], "job_types": [], "location": "United States, India", "created_at": 1794099000},
+        {"slug": "ai-engineer-3", "company_name": "Remote Ltd", "title": "AI Engineer",
+         "description": "<p>Fully remote in the UK.</p>", "remote": False,
+         "url": "https://www.arbeitnow.co.uk/jobs/companies/remote-ltd/ai-engineer-3",
+         "tags": [], "job_types": None, "location": "", "created_at": 1794090000},
+    ],
+    "links": {"next": "https://www.arbeitnow.co.uk/api/job-board-api?page=2"},
+    "meta": {"per_page": 100, "terms": "This is a free public API for jobs, please do not abuse."},
+}
+
+
+def test_arbeitnow_reads_the_newest_pages_of_uk_jobs(settings, fake_client):
+    client = fake_client([ARBEITNOW_ANSWER])
+    result = ArbeitnowSource(settings, client).run()
+    assert [call["params"]["page"] for call in client.calls] == list(range(1, 11))
+    assert [job.title for job in result.jobs] == ["Data Analyst", "AI Engineer"]  # not the US job
+    london, anywhere = result.jobs
+    assert (london.company, london.location) == ("Acme & Co", "London")
+    assert london.contract == "Full Time" and london.scope == SCOPE_UK_REMOTE
+    assert london.posted == date(2026, 11, 8)  # from the Unix timestamp, in UTC
+    assert "2 days a week in the office" in london.description
+    assert anywhere.location == "" and anywhere.contract == ""
