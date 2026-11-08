@@ -56,7 +56,7 @@ copy .env.example .env
 
 Then open `.env` in a text editor and paste in your API keys:
 
-- **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, about half of one full run with the default settings (47 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
+- **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, under half of one full run with the default settings (55 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
 - **Reed** (free): register at <https://www.reed.co.uk/developers/jobseeker> and copy the API key.
 
 Without keys the tool still runs, but it only searches the three remote job boards. The "near home" search needs Adzuna and/or Reed. Reed alone is enough, but Adzuna finds many local adverts that Reed doesn't.
@@ -78,7 +78,7 @@ On Windows you can also double-click `find_jobs.bat`. The report opens in Chrome
 | `--verbose` | Show every request and every saved answer used |
 | `--config PATH` | Use a different settings file (`config.local.toml` is then ignored) |
 
-A full run takes about eight minutes because requests are deliberately spaced out; the window shows each site's progress and roughly how long is left. Running it again within a few hours is almost instant, because saved answers are reused instead of asking the APIs again.
+A full run takes about ten minutes because requests are deliberately spaced out; the window shows each site's progress and roughly how long is left. Running it again within a few hours is almost instant, because saved answers are reused instead of asking the APIs again.
 
 ## Changing what it searches for
 

@@ -77,6 +77,16 @@ remote_terms = [
     "data annotation",
     "graduate AI",
     "junior AI",
+    # Jobs that are mostly working with AI models day to day: evaluating their answers,
+    # running AI tools for a business, or helping colleagues use them
+    "AI evaluator",
+    "AI generalist",
+    "AI tutor",
+    "AI operations",
+    "AI implementation",
+    "AI enablement",
+    "AI content",
+    "Copilot",
 ]
 
 [filters]
@@ -90,9 +100,11 @@ title_keywords = [
     "business intelligence", "bi", "ktp", "knowledge transfer", "research scientist",
     # AI titles that don't say "AI"
     "llm*", "genai", "gen ai", "generative", "prompt*", "nlp", "natural language",
-    "computer vision", "chatbot*", "conversational", "conversation design*", "agentic",
+    "computer vision", "chatbot*", "conversational", "conversation design*", "agentic*",
     "copilot", "mlops", "automation", "rpa", "annotat*", "data label*", "rater",
-    "forward deployed",
+    "forward deployed", "evaluator*", "agent operations", "machine intelligence",
+    # research and data roles that the words above miss
+    "data research*", "data executive", "research assistant", "research engineer",
 ]
 
 # ...and none of these (e.g. "Security Analyst", "Data Science Recruitment Consultant").
