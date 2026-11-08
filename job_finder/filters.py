@@ -56,16 +56,24 @@ _REMOTE = re.compile(
     r"work from anywhere)\b",
     re.IGNORECASE,
 )
-# Remote job boards label some jobs "Remote" that want regular office days ("4 days in our
-# London office", "Hybrid in London"). Occasional visits ("3 days in the office each quarter")
-# and a general hybrid policy don't count.
-_DAYS = r"(?:[1-5]|[Oo]ne|[Tt]wo|[Tt]hree|[Ff]our|[Ff]ive)\s+days?"
-_OFFICE = r"(?:in|at)\s+(?:the\s+|our\s+|an?\s+)?(?:[A-Z][\w\-]*\s+){0,3}office"
+# Regular office days, which make a job hybrid even when the advert also says "remote" or a
+# job board labels it remote: "2 days per week in office", "3 to 4 days a week on average
+# working in the office", "in our London office 3 days a week", "work remotely for up to 60%
+# of your days", "work from home, the office or a mix of both", "Hybrid in London".
+# Occasional visits ("3 days in the office each quarter") and a hybrid policy don't count.
+_DAYS = r"(?:[1-5]|(?i:one|two|three|four|five))\s+(?i:days?)"
+_WEEK = r"(?i:a|per|each)\s+(?i:week)"
+_OFFICE = r"\b(?i:in|at)\s+(?:(?i:the|our|an?)\s+)?(?:[A-Z][\w\-]*\s+){0,3}(?i:office)"
 _OFFICE_DAYS = re.compile(
-    rf"\b{_DAYS}\s+(?:a|per|each)\s+week\s+{_OFFICE}"
-    rf"|\b{_DAYS}\s+{_OFFICE}(?!\s+(?:a|each|every|per)\s+(?:month|quarter|year))"
-    r"|\b[Hh]ybrid,?\s+in\s+(?:our\s+|the\s+)?[A-Z][a-z]+"
+    rf"\b{_DAYS}\s+{_WEEK}\b[^.\n]{{0,40}}?{_OFFICE}"
+    rf"|\b{_DAYS}\s+{_OFFICE}(?!\s+(?i:a|each|every|per)\s+(?i:month|quarter|year))"
+    rf"|{_OFFICE}\s+{_DAYS}\s+{_WEEK}"
+    rf"|(?i:on[\s\-]?site)\s+{_DAYS}\s+{_WEEK}|\b{_DAYS}\s+{_WEEK}\s+(?i:on[\s\-]?site)"
+    r"|(?i:\bremote(?:ly)?\s+(?:for\s+)?up\s+to\s+(?:\d+\s*(?:%|per\s*cent)|[1-4]\s+days?))"
+    r"|(?i:\b(?:home|office)\b[^.\n]{0,40}\bmix\s+of\s+both\b)"
+    r"|\b(?i:hybrid),?\s+in\s+(?:(?i:our|the)\s+)?[A-Z][a-z]+"
 )
+_FULL_WEEK = re.compile(r"(?i:\b(?:5|five)\s+days?)")
 _UK_FRIENDLY = re.compile(
     r"\b(?:uk|u\.k|united kingdom|great britain|britain|england|scotland|wales|"
     r"europe|european|eu|emea|worldwide|world wide|anywhere|global|globally|"
@@ -194,7 +202,7 @@ def enrich(job: Job, rules: Rules, settings: Settings, today: date) -> None:
     """Fill in work pattern, distance, report section, tags, CV matches and score."""
     home = settings.home
     if job.scope == SCOPE_REMOTE_BOARD:
-        job.work_mode = WORK_HYBRID if _OFFICE_DAYS.search(job.description) else WORK_REMOTE
+        job.work_mode = _office_days(job.description) or WORK_REMOTE
     else:
         job.work_mode = detect_work_mode(f"{job.title}\n{job.location}\n{job.description}")
         km: float | None = None
@@ -252,9 +260,20 @@ def choose_section(job: Job, radius_km: float) -> str:
     return SECTION_LOCAL if job.scope == SCOPE_LOCAL else SECTION_CHECK
 
 
+def _office_days(text: str) -> str | None:
+    """Hybrid if the advert asks for regular office days (on-site for five a week), else None."""
+    match = _OFFICE_DAYS.search(text)
+    if match is None:
+        return None
+    return WORK_ON_SITE if _FULL_WEEK.search(match.group(0)) else WORK_HYBRID
+
+
 def detect_work_mode(text: str) -> str:
     """Read 'remote', 'hybrid' or 'office-based' wording in an advert."""
     text = _NOT_ABOUT_WORKING.sub(" ", text)
+    office = _office_days(text)
+    if office:
+        return office
     if _HYBRID.search(text):
         return WORK_HYBRID
     if _ON_SITE.search(text):

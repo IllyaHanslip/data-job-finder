@@ -80,6 +80,27 @@ def test_detect_work_mode():
     assert detect_work_mode("Remote sensing analyst in our Leeds office") == WORK_NOT_STATED
 
 
+def test_office_days_make_a_job_hybrid_even_when_it_says_remote():
+    hybrid = [
+        "London or Sheffield - 2 days per week in office, 3 days working remotely",
+        "We ask that individuals spend 3 to 4 days a week on average working in the office",
+        "Custom Work Environment: Work remotely for up to 60% of your days",
+        "Work Your Way: work from home, the office or a mix of both",
+        "Based in our Cambridge office 3 days a week, otherwise remote",
+        "On-site two days per week in Peterborough; remote the rest of the time",
+    ]
+    remote = [
+        "This role is remote and can be executed globally. If you prefer, you can work from "
+        "our offices in London.",
+        "All new joiners start their first day in our office to collect equipment to work "
+        "remotely. We are a 100% remote business.",
+        "Fully remote; we meet 2 days in the office each quarter.",
+    ]
+    assert [detect_work_mode(text) for text in hybrid] == [WORK_HYBRID] * len(hybrid)
+    assert [detect_work_mode(text) for text in remote] == [WORK_REMOTE] * len(remote)
+    assert detect_work_mode("Remote interviews; then 5 days a week in the office") == WORK_ON_SITE
+
+
 def test_open_to_uk():
     allowed = ["Worldwide", "UK", "Europe, UK", "EMEA", "Anywhere", "United Kingdom, Ireland",
                "CET +/- 3 hours", ""]
