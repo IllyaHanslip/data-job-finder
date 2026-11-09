@@ -18,8 +18,8 @@ class HimalayasSource(JobSource):
     name = "Himalayas"
     homepage = "https://himalayas.app"
     # Himalayas refreshes its data once a day, so asking more often gains nothing. Keyless
-    # callers share one public allowance, so a day's searches stay at a modest 50 at most.
-    politeness = Politeness(min_interval=5.0, cache_hours=24, daily_budget=50)
+    # callers share one public allowance, so a day's searches stay at a modest 60 at most.
+    politeness = Politeness(min_interval=5.0, cache_hours=24, daily_budget=60)
 
     SEARCH_URL = "https://himalayas.app/jobs/api/search"
 

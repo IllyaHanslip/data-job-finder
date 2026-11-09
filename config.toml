@@ -94,6 +94,11 @@ remote_terms = [
     "AI tools",
     "assistant AI",
     "administrator AI",
+    "operations assistant AI",
+    # AI and automation tools that adverts name
+    "Gemini",
+    "n8n",
+    "Power Automate",
 ]
 
 [filters]
