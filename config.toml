@@ -87,6 +87,10 @@ remote_terms = [
     "AI enablement",
     "AI content",
     "Copilot",
+    # Jobs in any field at companies that expect everyone to work with AI tools
+    "AI native",
+    "AI first",
+    "Claude",
 ]
 
 [filters]
@@ -107,6 +111,11 @@ title_keywords = [
     "data research*", "data executive", "research assistant", "research engineer",
 ]
 
+# Also keep jobs with other titles (operations, marketing, finance...) whose adverts clearly ask
+# for someone who works with AI tools ("experience using ChatGPT", "AI-first", "use AI daily").
+# They get a "Uses AI tools" badge, and the report can show them on their own or hide them.
+keep_ai_tool_jobs = true
+
 # ...and none of these (e.g. "Security Analyst", "Data Science Recruitment Consultant").
 exclude_title_keywords = [
     "security", "cyber", "soc", "penetration", "threat",
@@ -122,7 +131,7 @@ exclude_title_keywords = [
 # Titles containing these count as senior (see include_senior_roles above).
 senior_keywords = [
     "senior", "snr", "sr", "lead", "principal", "head", "director", "vp",
-    "vice president", "chief", "staff", "manager", "architect",
+    "vice president", "chief", "staff", "manager", "architect", "gm",
 ]
 
 # Titles containing these get an "Entry level" badge and rank higher.

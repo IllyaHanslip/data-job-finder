@@ -49,6 +49,8 @@ class Settings:
     api_keys: dict[str, str]
     data_dir: Path  # cache, history and reports are written under this folder
     browser: str = "default"  # which browser opens the report: one of BROWSERS
+    # Keep jobs with other titles whose adverts clearly ask for skill with AI tools
+    keep_ai_tool_jobs: bool = False
     # The optional Claude entry-level check ([claude] in config.toml)
     check_entry_level: bool = False
     claude_model: str = "claude-opus-5-5"
@@ -102,6 +104,8 @@ def load_settings(config_path: Path | None = None) -> Settings:
         data_dir=PROJECT_ROOT,
         # Optional, so settings files written before it existed still work.
         browser=_choice(report, "report", "browser", BROWSERS, default="default"),
+        keep_ai_tool_jobs="keep_ai_tool_jobs" in filters
+        and _flag(filters, "filters", "keep_ai_tool_jobs"),
         **_claude_settings(claude),
     )
 

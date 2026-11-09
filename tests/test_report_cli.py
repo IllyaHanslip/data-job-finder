@@ -14,7 +14,7 @@ import pytest
 
 from job_finder import cli, config
 from job_finder.config import DEFAULT_CONFIG_PATH, ConfigError, load_settings
-from job_finder.filters import TAG_NEEDS_EXPERIENCE, FilterSummary, job_key
+from job_finder.filters import TAG_AI_TOOLS, TAG_NEEDS_EXPERIENCE, FilterSummary, job_key
 from job_finder.http_client import PoliteClient, Politeness
 from job_finder.models import (
     SCOPE_LOCAL,
@@ -163,6 +163,18 @@ def test_a_run_shows_the_review_saved_in_claude_code(settings):
     assert "Quiet day" not in switched_off.html_path.read_text(encoding="utf-8")
 
 
+def test_jobs_kept_for_ai_skills_get_a_badge_and_filters(settings):
+    plain_job = sample_job()
+    html_path, _ = write_reports([plain_job], [], FilterSummary(), settings, NOW)
+    assert 'id="filter-ai-only"' not in html_path.read_text(encoding="utf-8")  # nothing to filter
+    ai_job = sample_job(source_id="9", title="Operations Associate", tags=[TAG_AI_TOOLS])
+    html_path, _ = write_reports([plain_job, ai_job], [], FilterSummary(), settings, NOW)
+    page = html_path.read_text(encoding="utf-8")
+    assert '<span class="badge ai">Uses AI tools</span>' in page
+    assert 'data-ai-tools="1"' in page and 'data-ai-tools="0"' in page
+    assert 'id="filter-ai-only"' in page and 'id="filter-ai-hide"' in page
+
+
 def test_card_links_every_site_a_job_was_found_on(settings):
     job = sample_job(
         source="Himalayas",
@@ -291,6 +303,18 @@ def test_shipped_config_file_is_valid():
     settings = load_settings()
     assert settings.home.name
     assert settings.local_terms and settings.title_keywords
+    assert settings.keep_ai_tool_jobs
+
+
+def test_keeping_ai_tool_jobs_is_optional_in_older_settings_files(tmp_path):
+    text = DEFAULT_CONFIG_PATH.read_text(encoding="utf-8")
+    path = tmp_path / "config.toml"
+    path.write_text(text.replace("keep_ai_tool_jobs = true", ""), encoding="utf-8")
+    assert load_settings(path).keep_ai_tool_jobs is False
+    path.write_text(text.replace("keep_ai_tool_jobs = true", 'keep_ai_tool_jobs = "yes"'),
+                    encoding="utf-8")
+    with pytest.raises(ConfigError, match="keep_ai_tool_jobs in config.toml should be true"):
+        load_settings(path)
 
 
 def test_local_settings_file_overrides_the_shared_one(tmp_path, monkeypatch):

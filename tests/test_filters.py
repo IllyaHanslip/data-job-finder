@@ -12,6 +12,7 @@ from job_finder.filters import (
     REASON_OFF_TOPIC,
     REASON_SENIOR,
     REASON_TOO_OLD,
+    TAG_AI_TOOLS,
     TAG_ENTRY,
     TAG_NEEDS_EXPERIENCE,
     TAG_SENIOR,
@@ -207,6 +208,28 @@ def test_remote_board_jobs_that_want_office_days_are_not_called_remote(settings)
         "Credit Analyst": (WORK_HYBRID, SECTION_CHECK),
         "Quant Analyst": (WORK_REMOTE, SECTION_REMOTE),  # a policy and rare visits don't count
     }
+
+
+def test_jobs_in_other_fields_that_ask_for_ai_skills_can_be_kept(settings):
+    adverts = {
+        "Operations Associate": "We're AI-first: you'll use AI tools every day to automate admin.",
+        "Marketing Executive": "You're confident with AI tools and have experience using ChatGPT.",
+        "Office Coordinator": "Some experience with AI would be nice.",  # one weak phrase
+        "Finance Assistant": "Join our AI-native platform team.",  # about the product, not you
+        "Operations Manager": "AI-first team; use AI daily.",  # senior, so still left out
+        "Data Analyst": "Experience using ChatGPT and confident with AI tools.",
+    }
+    jobs = [make_job(title=title, company=f"{title} Co", source_id=title, description=text)
+            for title, text in adverts.items()]
+    kept, summary = process_jobs(jobs, settings, TODAY)
+    assert [job.title for job in kept] == ["Data Analyst"]  # off unless keep_ai_tool_jobs is on
+
+    keen = dataclasses.replace(settings, keep_ai_tool_jobs=True)
+    kept, summary = process_jobs(jobs, keen, TODAY)
+    tags = {job.title: TAG_AI_TOOLS in job.tags for job in kept}
+    assert tags == {"Operations Associate": True, "Marketing Executive": True,
+                    "Data Analyst": False}  # a data title gets in anyway, so no badge
+    assert summary.removed[REASON_OFF_TOPIC] == 2 and summary.removed[REASON_SENIOR] == 1
 
 
 def test_a_far_away_namesake_does_not_move_a_local_job(settings):

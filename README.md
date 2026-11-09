@@ -23,6 +23,8 @@ Jobs are grouped into three sections:
 
 Within each section, entry-level roles and adverts mentioning more of your CV skills are listed first.
 
+Jobs in other fields (operations, marketing, finance and so on) are kept too when their advert clearly asks for someone who works with AI tools: "experience using ChatGPT", "an AI-first mindset", "use AI daily". They carry a **Uses AI tools** badge, and two checkboxes show them on their own or hide them. A company that only sells an AI product ("our AI-native platform") doesn't count. Turn this off with `keep_ai_tool_jobs = false` under `[filters]` in `config.toml`.
+
 ## Sources, and how the tool stays within their rules
 
 | Source | What it adds | Key | Limits the tool keeps to |
@@ -57,7 +59,7 @@ copy .env.example .env
 
 Then open `.env` in a text editor and paste in your API keys:
 
-- **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, under half of one full run with the default settings (55 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
+- **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, under half of one full run with the default settings (58 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
 - **Reed** (free): register at <https://www.reed.co.uk/developers/jobseeker> and copy the API key.
 
 Without keys the tool still runs, but it only searches the three remote job boards and Arbeitnow's UK feed. The "near home" search needs Adzuna and/or Reed. Reed alone is enough, but Adzuna finds many local adverts that Reed doesn't.
@@ -79,7 +81,7 @@ On Windows you can also double-click `find_jobs.bat`. The report opens in Chrome
 | `--verbose` | Show every request and every saved answer used |
 | `--config PATH` | Use a different settings file (`config.local.toml` is then ignored) |
 
-A full run takes about ten minutes because requests are deliberately spaced out; the window shows each site's progress and roughly how long is left. Running it again within a few hours is almost instant, because saved answers are reused instead of asking the APIs again.
+A full run takes about eleven minutes because requests are deliberately spaced out; the window shows each site's progress and roughly how long is left. Running it again within a few hours is almost instant, because saved answers are reused instead of asking the APIs again.
 
 ## Changing what it searches for
 
@@ -137,7 +139,7 @@ flowchart LR
 2. **Each source** (`job_finder/sources/`) builds its list of searches. For example, Adzuna searches each phrase within 55 km of home, then UK-wide with "remote" added.
 3. **Every request goes through `PoliteClient`** (`job_finder/http_client.py`). It returns a saved answer if one is recent enough, otherwise waits its turn, checks the daily budget, sends the request and saves the answer.
 4. **Each answer is parsed** into a common `Job` record (`job_finder/models.py`), with HTML stripped from descriptions and dates and salaries normalised (`job_finder/text.py`).
-5. **Filtering** (`job_finder/filters.py`) drops adverts that are too old, remote jobs not open to the UK, titles outside data, maths and AI, excluded job types (IT support, security, recruiters) and senior roles. The same job listed on two sites is merged.
+5. **Filtering** (`job_finder/filters.py`) drops adverts that are too old, remote jobs not open to the UK, titles outside data, maths and AI (unless the advert clearly asks for AI skills), excluded job types (IT support, security, recruiters) and senior roles. The same job listed on two sites is merged.
 6. **Labelling** works out whether each job is remote, hybrid or on-site from the advert's wording. It estimates the distance from home using the job's coordinates, or a built-in list of about 4,300 UK towns and cities (`job_finder/uk_places.tsv`), places the job in a section, notes which CV skills it mentions, and scores it for ordering.
 7. **Claude's check** (optional, `job_finder/entry_check.py`) asks Claude whether each advert is really entry level and adjusts its badge and ranking. A review in Claude Code (`job_finder/review.py`) can also add picks and notes, shown in the report's Claude's review box.
 8. **History** (`job_finder/history.py`) remembers when each job was first seen, so new ones get a badge.

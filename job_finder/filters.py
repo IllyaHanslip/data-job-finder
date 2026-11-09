@@ -31,6 +31,7 @@ TAG_ENTRY = "Entry level"
 TAG_SENIOR = "Senior"
 TAG_TEACHING = "Teaching"
 TAG_NEEDS_EXPERIENCE = "Needs experience"  # from the optional Claude check
+TAG_AI_TOOLS = "Uses AI tools"  # kept for asking for AI skills, though the title is elsewhere
 
 REASON_TOO_OLD = "older than the age limit"
 REASON_NOT_UK = "remote jobs not open to UK applicants"
@@ -74,6 +75,31 @@ _OFFICE_DAYS = re.compile(
     r"|\b(?i:hybrid),?\s+in\s+(?:(?i:our|the)\s+)?[A-Z][a-z]+"
 )
 _FULL_WEEK = re.compile(r"(?i:\b(?:5|five)\s+days?)")
+# Adverts in any field that want the person to work with AI tools: "experience using ChatGPT",
+# "confident with AI tools", "use AI to automate", "an AI-first mindset". Two different
+# phrases, or one strong one, count. A company that merely sells AI ("our AI-native
+# platform", "AI-first fintech") doesn't.
+_AI = (r"(?:ai|a\.i\.|generative ai|genai|gen ai|llms?|chatgpt|claude|copilot|gemini|"
+       r"ai tools?|ai assistants?|ai agents?)")
+_AI_FIRST = (
+    r"\bai[\s\-](?:first|native)\b(?!\s+(?:[\w\-]+\s+)?(?:platforms?|products?|workspaces?|erp|"
+    r"systems?|software|solutions?|tools?|apps?|applications?|firms?|technolog\w*|engines?|"
+    r"ecosystems?|enterprise|services?|start[\s\-]?ups?|compan\w*|business\w*|\w+tech)\b)"
+)
+_AI_SKILLS = re.compile(
+    rf"\bexperience (?:using|with|of|in) {_AI}\b"
+    rf"|\b(?:comfortable|confident|proficient|skilled|fluent|familiar(?:ity)?|curious)"
+    rf"\s+(?:using|with|in)\s+{_AI}\b"
+    rf"|\b(?:use|using|uses|leverage|leveraging|harness|harnessing|embrace|embracing|adopt|"
+    rf"adopting)\s+{_AI}\s+(?:tools?\s+)?(?:to|for|in|daily|every ?day)\b"
+    rf"|{_AI_FIRST}|\bai[\s\-](?:literate|savvy)\b|\bprompt (?:engineering|writing|design)\b"
+    r"|\bai[\s\-]enabled (?:workflows?|ways of working)\b",
+    re.IGNORECASE,
+)
+_AI_STRONG = re.compile(
+    rf"{_AI_FIRST}|\b(?:use|uses|using) (?:ai|ai tools) (?:daily|every ?day)\b",
+    re.IGNORECASE,
+)
 _UK_FRIENDLY = re.compile(
     r"\b(?:uk|u\.k|united kingdom|great britain|britain|england|scotland|wales|"
     r"europe|european|eu|emea|worldwide|world wide|anywhere|global|globally|"
@@ -189,13 +215,23 @@ def _rejection_reason(
         return REASON_TOO_OLD
     if job.scope == SCOPE_REMOTE_BOARD and not open_to_uk(job.remote_regions):
         return REASON_NOT_UK
-    if not rules.titles.search(job.title):
+    if not rules.titles.search(job.title) and not _kept_for_ai_skills(job, settings):
         return REASON_OFF_TOPIC
     if rules.excluded.search(job.title):
         return REASON_EXCLUDED
     if not settings.include_senior and is_senior(job, rules):
         return REASON_SENIOR
     return None
+
+
+def asks_for_ai_skills(text: str) -> bool:
+    """True if an advert clearly wants someone who works with AI tools (see _AI_SKILLS)."""
+    phrases = {re.sub(r"[\s\-]+", " ", m.group(0).lower()) for m in _AI_SKILLS.finditer(text)}
+    return len(phrases) >= 2 or bool(_AI_STRONG.search(text))
+
+
+def _kept_for_ai_skills(job: Job, settings: Settings) -> bool:
+    return settings.keep_ai_tool_jobs and asks_for_ai_skills(job.description)
 
 
 def enrich(job: Job, rules: Rules, settings: Settings, today: date) -> None:
@@ -231,6 +267,7 @@ def enrich(job: Job, rules: Rules, settings: Settings, today: date) -> None:
             (TAG_ENTRY, entry),
             (TAG_SENIOR, senior),
             (TAG_TEACHING, bool(_TEACHING.search(job.title))),
+            (TAG_AI_TOOLS, not rules.titles.search(job.title)),  # only kept for its AI skills
         )
         if present
     ]

@@ -13,6 +13,7 @@ from pathlib import Path
 
 from job_finder.config import Settings
 from job_finder.filters import (
+    TAG_AI_TOOLS,
     TAG_ENTRY,
     TAG_NEEDS_EXPERIENCE,
     TAG_SENIOR,
@@ -193,7 +194,8 @@ def render_html(
         _review_html(review, jobs),
         _sources_html(results, summary, claude_status),
         _APPLICATIONS,
-        _controls(with_claude=any(job.claude_verdict for job in jobs)),
+        _controls(with_claude=any(job.claude_verdict for job in jobs),
+                  with_ai_tools=any(TAG_AI_TOOLS in job.tags for job in jobs)),
         "</header>",
         "<main>",
         *sections,
@@ -302,7 +304,8 @@ def _card(job: Job, today: date) -> str:
     if job.claude_pick:
         badges.append("<span class=\"badge pick\">Claude's pick</span>")
     for tag in job.tags:
-        style = {TAG_ENTRY: "entry", TAG_SENIOR: "warn", TAG_NEEDS_EXPERIENCE: "warn"}.get(tag, "")
+        style = {TAG_ENTRY: "entry", TAG_SENIOR: "warn", TAG_NEEDS_EXPERIENCE: "warn",
+                 TAG_AI_TOOLS: "ai"}.get(tag, "")
         badges.append(f'<span class="badge {style}">{_e(tag)}</span>')
     if job.drive_minutes is not None and job.drive_minutes > 60:
         badges.append('<span class="badge warn">Over 1 hr?</span>')
@@ -348,6 +351,7 @@ def _card(job: Job, today: date) -> str:
         f'data-new="{int(job.is_new)}" data-entry="{int(TAG_ENTRY in job.tags)}" '
         f'data-needs-exp="{int(TAG_NEEDS_EXPERIENCE in job.tags)}" '
         f'data-teaching="{int(TAG_TEACHING in job.tags)}" data-applied="0" '
+        f'data-ai-tools="{int(TAG_AI_TOOLS in job.tags)}" '
         f'data-key="{_e(job_key(job))}" data-title="{_e(job.title)}" '
         f'data-company="{_e(job.company)}" data-location="{_e(job.location)}" '
         f'data-url="{_e(url)}"'
@@ -398,10 +402,14 @@ def _e(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
-def _controls(with_claude: bool) -> str:
-    """The filter bar. The "needs experience" filter only appears when Claude's check ran."""
+def _controls(with_claude: bool, with_ai_tools: bool = False) -> str:
+    """The filter bar. The "needs experience" filter only appears when Claude's check ran,
+    and the AI-tool filters only when some jobs were kept for asking for AI skills."""
     claude = ('<label><input type="checkbox" id="filter-experienced"> Hide "needs '
               'experience"</label>\n') if with_claude else ""
+    if with_ai_tools:
+        claude += ('<label><input type="checkbox" id="filter-ai-only"> AI-tool jobs only</label>\n'
+                   '<label><input type="checkbox" id="filter-ai-hide"> Hide AI-tool jobs</label>\n')
     return (
         '<div class="controls" role="search">\n'
         '<input type="search" id="filter-text" aria-label="Filter jobs"\n'
@@ -499,6 +507,7 @@ details.section > summary { cursor: pointer; }
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.applied { background: var(--done-soft); color: var(--done); }
 .badge.pick { background: var(--pick-soft); color: var(--pick); }
+.badge.ai { background: var(--done-soft); color: var(--done); }
 .badge[hidden] { display: none; }
 .meta { margin: 0 0 8px; color: var(--muted); font-size: .88rem; }
 .desc { margin: 0 0 6px; }
@@ -529,12 +538,15 @@ _SCRIPT = """
   var hideTeaching = document.getElementById("filter-teaching");
   var hideApplied = document.getElementById("filter-applied");
   var hideExperienced = document.getElementById("filter-experienced");  // Claude's check only
+  var aiOnly = document.getElementById("filter-ai-only");  // only when some jobs use AI tools
+  var aiHide = document.getElementById("filter-ai-hide");
   var list = document.getElementById("applied-list");
   var appliedCount = document.getElementById("applied-count");
   var note = document.getElementById("applied-note");
   var download = document.getElementById("applied-download");
   var FILTERS = "data-job-finder.filters";  // ticked filters, remembered between reports
-  var boxes = [onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced].filter(Boolean);
+  var boxes = [onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced, aiOnly, aiHide]
+    .filter(Boolean);
   var jobs = Array.prototype.slice.call(document.querySelectorAll(".job"));
   var haystacks = jobs.map(function (job) {
     var button = job.querySelector(".mark-applied");
@@ -551,7 +563,9 @@ _SCRIPT = """
         (!onlyEntry.checked || job.dataset.entry === "1") &&
         (!hideTeaching.checked || job.dataset.teaching !== "1") &&
         (!hideApplied.checked || job.dataset.applied !== "1") &&
-        (!hideExperienced || !hideExperienced.checked || job.dataset.needsExp !== "1");
+        (!hideExperienced || !hideExperienced.checked || job.dataset.needsExp !== "1") &&
+        (!aiOnly || !aiOnly.checked || job.dataset.aiTools === "1") &&
+        (!aiHide || !aiHide.checked || job.dataset.aiTools !== "1");
       job.hidden = !show;
     });
     document.querySelectorAll("[data-count-for]").forEach(function (badge) {
@@ -728,7 +742,16 @@ _SCRIPT = """
   jobs.forEach(function (job) {
     job.querySelector(".mark-applied").addEventListener("click", function () { toggle(job); });
   });
-  [text, onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced]
+  // "AI-tool jobs only" and "Hide AI-tool jobs" can't both be ticked: ticking one clears the
+  // other (this runs before the list updates and the boxes are remembered).
+  [[aiOnly, aiHide], [aiHide, aiOnly]].forEach(function (pair) {
+    if (pair[0] && pair[1]) {
+      pair[0].addEventListener("change", function () {
+        if (pair[0].checked) { pair[1].checked = false; }
+      });
+    }
+  });
+  [text, onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced, aiOnly, aiHide]
     .filter(Boolean)
     .forEach(function (el) {
       el.addEventListener("input", update);
