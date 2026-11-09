@@ -75,10 +75,10 @@ _OFFICE_DAYS = re.compile(
     r"|\b(?i:hybrid),?\s+in\s+(?:(?i:our|the)\s+)?[A-Z][a-z]+"
 )
 _FULL_WEEK = re.compile(r"(?i:\b(?:5|five)\s+days?)")
-# Adverts in any field that want the person to work with AI tools: "experience using ChatGPT",
-# "confident with AI tools", "use AI to automate", "an AI-first mindset". Two different
-# phrases, or one strong one, count. A company that merely sells AI ("our AI-native
-# platform", "AI-first fintech") doesn't.
+# Adverts in any field that ask the person to work with AI tools: "experience using ChatGPT",
+# "confident with AI tools", "automate processes using AI", "an AI-first mindset". One such
+# phrase is enough. A company that merely sells AI ("our AI-native platform", "AI-first
+# fintech"), a privacy notice about AI or a developer's tool list doesn't count.
 _AI = (r"(?:ai|a\.i\.|generative ai|genai|gen ai|llms?|chatgpt|claude|copilot|gemini|"
        r"ai tools?|ai assistants?|ai agents?)")
 _AI_FIRST = (
@@ -87,17 +87,22 @@ _AI_FIRST = (
     r"ecosystems?|enterprise|services?|start[\s\-]?ups?|compan\w*|business\w*|\w+tech)\b)"
 )
 _AI_SKILLS = re.compile(
-    rf"\bexperience (?:using|with|of|in) {_AI}\b"
+    rf"\bexperience (?:(?:of|in) )?(?:using|with|of|in) {_AI}\b"
     rf"|\b(?:comfortable|confident|proficient|skilled|fluent|familiar(?:ity)?|curious)"
     rf"\s+(?:using|with|in)\s+{_AI}\b"
+    rf"|\b(?:knowledge|understanding|awareness) of {_AI}\s+(?:tools?|assistants?|platforms?)\b"
     rf"|\b(?:use|using|uses|leverage|leveraging|harness|harnessing|embrace|embracing|adopt|"
     rf"adopting)\s+{_AI}\s+(?:tools?\s+)?(?:to|for|in|daily|every ?day)\b"
+    rf"|\b(?:automat|streamlin|improv|speed)\w*(?:\s+[\w\-]+){{0,3}}\s+(?:with|using|through|"
+    rf"via)\s+{_AI}\b"
+    rf"|\b(?:ai|generative ai|genai) tools? (?:such as|like|including)\b"
     rf"|{_AI_FIRST}|\bai[\s\-](?:literate|savvy)\b|\bprompt (?:engineering|writing|design)\b"
     r"|\bai[\s\-]enabled (?:workflows?|ways of working)\b",
     re.IGNORECASE,
 )
-_AI_STRONG = re.compile(
-    rf"{_AI_FIRST}|\b(?:use|uses|using) (?:ai|ai tools) (?:daily|every ?day)\b",
+_NEGATED_BEFORE = re.compile(r"\b(?:no|not|without|never)\b(?:\s+[\w\-]+){0,2}\s*$", re.I)
+_NEGATED_AFTER = re.compile(
+    r"\W*(?:[\w\-]+\s+){0,3}(?:is|are)?\s*(?:not|n't)\s+(?:required|necessary|needed|essential)",
     re.IGNORECASE,
 )
 _UK_FRIENDLY = re.compile(
@@ -225,9 +230,16 @@ def _rejection_reason(
 
 
 def asks_for_ai_skills(text: str) -> bool:
-    """True if an advert clearly wants someone who works with AI tools (see _AI_SKILLS)."""
-    phrases = {re.sub(r"[\s\-]+", " ", m.group(0).lower()) for m in _AI_SKILLS.finditer(text)}
-    return len(phrases) >= 2 or bool(_AI_STRONG.search(text))
+    """True if an advert asks the person to work with AI tools (see _AI_SKILLS).
+
+    Phrases said the other way round don't count: "No prior experience in AI is required".
+    """
+    for match in _AI_SKILLS.finditer(text):
+        before = text[max(0, match.start() - 30):match.start()]
+        after = text[match.end():match.end() + 40]
+        if not (_NEGATED_BEFORE.search(before) or _NEGATED_AFTER.match(after)):
+            return True
+    return False
 
 
 def _kept_for_ai_skills(job: Job, settings: Settings) -> bool:

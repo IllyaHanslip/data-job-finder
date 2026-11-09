@@ -213,11 +213,15 @@ def test_remote_board_jobs_that_want_office_days_are_not_called_remote(settings)
 def test_jobs_in_other_fields_that_ask_for_ai_skills_can_be_kept(settings):
     adverts = {
         "Operations Associate": "We're AI-first: you'll use AI tools every day to automate admin.",
-        "Marketing Executive": "You're confident with AI tools and have experience using ChatGPT.",
-        "Office Coordinator": "Some experience with AI would be nice.",  # one weak phrase
+        "Marketing Executive": "You have experience using ChatGPT.",
+        "Office Coordinator": "You'll streamline our booking process using AI.",
+        "Executive Assistant": "Familiar with AI tools such as Copilot.",
         "Finance Assistant": "Join our AI-native platform team.",  # about the product, not you
+        "Payroll Assistant": "Please read our Artificial Intelligence (AI) Notice.",
+        "Web Developer": "Our stack: C#, GitHub Copilot, Docker.",
+        "Hospitality Worker": "No prior experience in AI is required.",  # said the other way
         "Operations Manager": "AI-first team; use AI daily.",  # senior, so still left out
-        "Data Analyst": "Experience using ChatGPT and confident with AI tools.",
+        "Data Analyst": "Experience using ChatGPT.",
     }
     jobs = [make_job(title=title, company=f"{title} Co", source_id=title, description=text)
             for title, text in adverts.items()]
@@ -228,8 +232,9 @@ def test_jobs_in_other_fields_that_ask_for_ai_skills_can_be_kept(settings):
     kept, summary = process_jobs(jobs, keen, TODAY)
     tags = {job.title: TAG_AI_TOOLS in job.tags for job in kept}
     assert tags == {"Operations Associate": True, "Marketing Executive": True,
+                    "Office Coordinator": True, "Executive Assistant": True,
                     "Data Analyst": False}  # a data title gets in anyway, so no badge
-    assert summary.removed[REASON_OFF_TOPIC] == 2 and summary.removed[REASON_SENIOR] == 1
+    assert summary.removed[REASON_OFF_TOPIC] == 4 and summary.removed[REASON_SENIOR] == 1
 
 
 def test_a_far_away_namesake_does_not_move_a_local_job(settings):

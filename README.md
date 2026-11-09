@@ -23,7 +23,7 @@ Jobs are grouped into three sections:
 
 Within each section, entry-level roles and adverts mentioning more of your CV skills are listed first.
 
-Jobs in other fields (operations, marketing, finance and so on) are kept too when their advert clearly asks for someone who works with AI tools: "experience using ChatGPT", "an AI-first mindset", "use AI daily". They carry a **Uses AI tools** badge, and two checkboxes show them on their own or hide them. A company that only sells an AI product ("our AI-native platform") doesn't count. Turn this off with `keep_ai_tool_jobs = false` under `[filters]` in `config.toml`.
+Jobs in other fields (operations, admin, marketing, finance and so on) are kept too when their advert asks the person to work with AI tools, even once: "experience using ChatGPT", "automate processes using AI", "an AI-first mindset". They carry a **Uses AI tools** badge, and two checkboxes show them on their own or hide them. Mentions that say nothing about the job don't count: a company describing its AI product ("our AI-native platform"), a privacy notice about AI, a developer's tool list, or "no prior experience in AI is required". Senior jobs stay out, as everywhere else. Turn this off with `keep_ai_tool_jobs = false` under `[filters]` in `config.toml`.
 
 ## Sources, and how the tool stays within their rules
 
@@ -59,7 +59,7 @@ copy .env.example .env
 
 Then open `.env` in a text editor and paste in your API keys:
 
-- **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, under half of one full run with the default settings (58 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
+- **Adzuna** (paid after a trial): sign up at <https://developer.adzuna.com/signup> and copy the Application ID and Application Key. New accounts get 25 free trial calls, under half of one full run with the default settings (61 calls). After that, Adzuna charges £8 a month for 5,000 calls a month, up to 500 a day (as of October 2026). If you don't subscribe, set `adzuna = false` under `[sources]` in `config.toml` once the trial is used up; otherwise the tool keeps reusing its last saved Adzuna results.
 - **Reed** (free): register at <https://www.reed.co.uk/developers/jobseeker> and copy the API key.
 
 Without keys the tool still runs, but it only searches the three remote job boards and Arbeitnow's UK feed. The "near home" search needs Adzuna and/or Reed. Reed alone is enough, but Adzuna finds many local adverts that Reed doesn't.
@@ -81,7 +81,7 @@ On Windows you can also double-click `find_jobs.bat`. The report opens in Chrome
 | `--verbose` | Show every request and every saved answer used |
 | `--config PATH` | Use a different settings file (`config.local.toml` is then ignored) |
 
-A full run takes about eleven minutes because requests are deliberately spaced out; the window shows each site's progress and roughly how long is left. Running it again within a few hours is almost instant, because saved answers are reused instead of asking the APIs again.
+A full run takes about twelve minutes because requests are deliberately spaced out; the window shows each site's progress and roughly how long is left. Running it again within a few hours is almost instant, because saved answers are reused instead of asking the APIs again.
 
 ## Changing what it searches for
 

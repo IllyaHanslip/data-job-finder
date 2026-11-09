@@ -91,6 +91,9 @@ remote_terms = [
     "AI native",
     "AI first",
     "Claude",
+    "AI tools",
+    "assistant AI",
+    "administrator AI",
 ]
 
 [filters]
@@ -111,8 +114,8 @@ title_keywords = [
     "data research*", "data executive", "research assistant", "research engineer",
 ]
 
-# Also keep jobs with other titles (operations, marketing, finance...) whose adverts clearly ask
-# for someone who works with AI tools ("experience using ChatGPT", "AI-first", "use AI daily").
+# Also keep jobs with other titles (operations, marketing, finance...) whose adverts ask the
+# person to work with AI tools ("experience using ChatGPT", "automate processes using AI").
 # They get a "Uses AI tools" badge, and the report can show them on their own or hide them.
 keep_ai_tool_jobs = true
 
