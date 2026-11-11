@@ -99,6 +99,11 @@ remote_terms = [
     "Gemini",
     "n8n",
     "Power Automate",
+    # Jobs improving how a business works, often with AI and automation
+    "business systems analyst",
+    "process improvement analyst",
+    "automation analyst",
+    "automation specialist",
 ]
 
 [filters]
@@ -133,7 +138,7 @@ exclude_title_keywords = [
     "recruit*", "account executive", "business development", "telesales", "data entry",
     # software testing and factory automation, let in by "automation" above
     "tester", "test automation", "automation test*", "test engineer", "plc", "scada",
-    "industrial automation",
+    "industrial automation", "control system*",
 ]
 
 # Titles containing these count as senior (see include_senior_roles above).

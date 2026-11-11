@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     client = PoliteClient(settings.cache_dir, settings.user_agent, offline=args.offline)
     if not args.offline:
         log.info(
-            "A full search takes about 13 minutes (seconds if you ran it in the last few hours).\n"
+            "A full search takes about 14 minutes (seconds if you ran it in the last few hours).\n"
             "Keep this window open: the report opens when it's finished.\n"
         )
     try:
