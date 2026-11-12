@@ -16,6 +16,7 @@ from job_finder.filters import (
     TAG_ENTRY,
     TAG_NEEDS_EXPERIENCE,
     TAG_SENIOR,
+    TAG_STRETCH,
     TAG_TEACHING,
     WORK_HYBRID,
     WORK_NOT_STATED,
@@ -26,6 +27,7 @@ from job_finder.filters import (
     detect_work_mode,
     open_to_uk,
     process_jobs,
+    years_asked,
 )
 from job_finder.models import (
     SCOPE_LOCAL,
@@ -235,6 +237,38 @@ def test_jobs_in_other_fields_that_ask_for_ai_skills_can_be_kept(settings):
                     "Office Coordinator": True, "Executive Assistant": True,
                     "Data Analyst": False}  # a data title gets in anyway, so no badge
     assert summary.removed[REASON_OFF_TOPIC] == 4 and summary.removed[REASON_SENIOR] == 1
+
+
+def test_years_of_experience_are_read_from_the_advert():
+    assert years_asked("You'll need 2+ years of commercial SQL experience.") == 2
+    assert years_asked("3-5 years' experience in analytics; Python a plus") == 3
+    assert years_asked("A minimum of two years' professional experience") == 2
+    assert years_asked("Experience: 3 years in a data role") == 3
+    assert years_asked("1-2 years experience, or 3 years for the senior band") == 1
+    assert years_asked("With over 30 years of experience, we lead the market.") is None
+    assert years_asked("No previous experience required. A 2 year graduate scheme.") is None
+
+
+def test_jobs_asking_for_two_or_three_years_are_stretch_jobs(settings):
+    adverts = {
+        "Data Analyst": "You'll need 2+ years of SQL experience.",
+        "Insight Analyst": "At least 5 years' experience in insight.",
+        "Junior Analyst": "1-2 years of experience, internships count.",
+        "Senior Data Analyst": "3 years of experience.",  # senior titles are never stretch
+    }
+    jobs = [make_job(title=title, company=f"{title} Co", source_id=title, description=text)
+            for title, text in adverts.items()]
+    wide = dataclasses.replace(settings, include_senior=True)
+    kept, _ = process_jobs(jobs, wide, TODAY)
+    assert {job.title for job in kept if TAG_STRETCH in job.tags} == {"Data Analyst"}
+
+    # Claude's reading of the whole advert decides once there is one.
+    insight = next(job for job in kept if job.title == "Insight Analyst")
+    insight.claude_verdict, insight.claude_years = VERDICT_NEEDS_EXPERIENCE, 3
+    analyst = next(job for job in kept if job.title == "Data Analyst")
+    analyst.claude_verdict, analyst.claude_years = VERDICT_ENTRY, 0
+    apply_claude_verdicts(kept, TODAY)
+    assert {job.title for job in kept if TAG_STRETCH in job.tags} == {"Insight Analyst"}
 
 
 def test_a_far_away_namesake_does_not_move_a_local_job(settings):

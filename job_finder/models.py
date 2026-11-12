@@ -52,6 +52,7 @@ class Job:
     is_new: bool = False
     also_on: list[str] = field(default_factory=list)
     also_urls: dict[str, str] = field(default_factory=dict)  # other site's name -> its own link
+    years_asked: int | None = None  # fewest years of experience named in the advert's text
 
     # Filled in by entry_check, when that optional step runs
     claude_verdict: str = ""

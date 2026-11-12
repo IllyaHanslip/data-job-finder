@@ -17,6 +17,7 @@ from job_finder.filters import (
     TAG_ENTRY,
     TAG_NEEDS_EXPERIENCE,
     TAG_SENIOR,
+    TAG_STRETCH,
     TAG_TEACHING,
     WORK_NOT_STATED,
     WORK_REMOTE,
@@ -305,7 +306,7 @@ def _card(job: Job, today: date) -> str:
         badges.append("<span class=\"badge pick\">Claude's pick</span>")
     for tag in job.tags:
         style = {TAG_ENTRY: "entry", TAG_SENIOR: "warn", TAG_NEEDS_EXPERIENCE: "warn",
-                 TAG_AI_TOOLS: "ai"}.get(tag, "")
+                 TAG_AI_TOOLS: "ai", TAG_STRETCH: "stretch"}.get(tag, "")
         badges.append(f'<span class="badge {style}">{_e(tag)}</span>')
     if job.drive_minutes is not None and job.drive_minutes > 60:
         badges.append('<span class="badge warn">Over 1 hr?</span>')
@@ -349,6 +350,7 @@ def _card(job: Job, today: date) -> str:
     # using these details even after the job drops out of the results.
     attributes = (
         f'data-new="{int(job.is_new)}" data-entry="{int(TAG_ENTRY in job.tags)}" '
+        f'data-stretch="{int(TAG_STRETCH in job.tags)}" '
         f'data-needs-exp="{int(TAG_NEEDS_EXPERIENCE in job.tags)}" '
         f'data-teaching="{int(TAG_TEACHING in job.tags)}" data-applied="0" '
         f'data-ai-tools="{int(TAG_AI_TOOLS in job.tags)}" '
@@ -415,7 +417,9 @@ def _controls(with_claude: bool, with_ai_tools: bool = False) -> str:
         '<input type="search" id="filter-text" aria-label="Filter jobs"\n'
         '  placeholder="Filter by word, company or place">\n'
         '<label><input type="checkbox" id="filter-new"> New today</label>\n'
-        '<label><input type="checkbox" id="filter-entry"> Entry level only</label>\n'
+        '<label><input type="checkbox" id="filter-entry"> Entry level</label>\n'
+        '<label title="Asks for 2-3 years, without a senior title: worth a try with a strong '
+        'portfolio"><input type="checkbox" id="filter-stretch"> Stretch (2-3 yrs)</label>\n'
         '<label><input type="checkbox" id="filter-teaching"> Hide teaching</label>\n'
         '<label><input type="checkbox" id="filter-applied"> Hide applied</label>\n'
         f"{claude}</div>"
@@ -447,6 +451,7 @@ _CSS = """
   --accent: #1d5fbf; --accent-soft: #e7effb; --new: #0f7a45; --new-soft: #e2f4e9;
   --warn: #8a5300; --warn-soft: #fbf0d9; --tag: #4b5563; --tag-soft: #eceef2;
   --done: #5b3cc4; --done-soft: #efeafd; --pick: #0b6e75; --pick-soft: #dcf1f2;
+  --stretch: #9a3412; --stretch-soft: #fdebdd;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -455,6 +460,7 @@ _CSS = """
     --accent: #84b4ff; --accent-soft: #1e2a3c; --new: #66d39b; --new-soft: #16301f;
     --warn: #f0c36c; --warn-soft: #382c14; --tag: #c7ced8; --tag-soft: #2a303a;
     --done: #b9a4ff; --done-soft: #2a2340; --pick: #6fd3d9; --pick-soft: #12302f;
+    --stretch: #fdba8c; --stretch-soft: #3b2216;
     color-scheme: dark;
   }
 }
@@ -508,6 +514,7 @@ details.section > summary { cursor: pointer; }
 .badge.applied { background: var(--done-soft); color: var(--done); }
 .badge.pick { background: var(--pick-soft); color: var(--pick); }
 .badge.ai { background: var(--done-soft); color: var(--done); }
+.badge.stretch { background: var(--stretch-soft); color: var(--stretch); }
 .badge[hidden] { display: none; }
 .meta { margin: 0 0 8px; color: var(--muted); font-size: .88rem; }
 .desc { margin: 0 0 6px; }
@@ -535,6 +542,7 @@ _SCRIPT = """
   var text = document.getElementById("filter-text");
   var onlyNew = document.getElementById("filter-new");
   var onlyEntry = document.getElementById("filter-entry");
+  var stretch = document.getElementById("filter-stretch");
   var hideTeaching = document.getElementById("filter-teaching");
   var hideApplied = document.getElementById("filter-applied");
   var hideExperienced = document.getElementById("filter-experienced");  // Claude's check only
@@ -545,8 +553,8 @@ _SCRIPT = """
   var note = document.getElementById("applied-note");
   var download = document.getElementById("applied-download");
   var FILTERS = "data-job-finder.filters";  // ticked filters, remembered between reports
-  var boxes = [onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced, aiOnly, aiHide]
-    .filter(Boolean);
+  var boxes = [onlyNew, onlyEntry, stretch, hideTeaching, hideApplied, hideExperienced, aiOnly,
+    aiHide].filter(Boolean);
   var jobs = Array.prototype.slice.call(document.querySelectorAll(".job"));
   var haystacks = jobs.map(function (job) {
     var button = job.querySelector(".mark-applied");
@@ -557,13 +565,17 @@ _SCRIPT = """
 
   function update() {
     var words = text.value.toLowerCase().split(/\\s+/).filter(Boolean);
+    // "Entry level" and "Stretch" each add their jobs: tick both to see both kinds together.
+    var levels = onlyEntry.checked || stretch.checked;
     jobs.forEach(function (job, i) {
+      var isStretch = stretch.checked && job.dataset.stretch === "1";
+      var level = !levels || (onlyEntry.checked && job.dataset.entry === "1") || isStretch;
       var show = words.every(function (w) { return haystacks[i].indexOf(w) !== -1; }) &&
-        (!onlyNew.checked || job.dataset.new === "1") &&
-        (!onlyEntry.checked || job.dataset.entry === "1") &&
+        (!onlyNew.checked || job.dataset.new === "1") && level &&
         (!hideTeaching.checked || job.dataset.teaching !== "1") &&
         (!hideApplied.checked || job.dataset.applied !== "1") &&
-        (!hideExperienced || !hideExperienced.checked || job.dataset.needsExp !== "1") &&
+        (!hideExperienced || !hideExperienced.checked || job.dataset.needsExp !== "1" ||
+         isStretch) &&
         (!aiOnly || !aiOnly.checked || job.dataset.aiTools === "1") &&
         (!aiHide || !aiHide.checked || job.dataset.aiTools !== "1");
       job.hidden = !show;
@@ -751,7 +763,7 @@ _SCRIPT = """
       });
     }
   });
-  [text, onlyNew, onlyEntry, hideTeaching, hideApplied, hideExperienced, aiOnly, aiHide]
+  [text, onlyNew, onlyEntry, stretch, hideTeaching, hideApplied, hideExperienced, aiOnly, aiHide]
     .filter(Boolean)
     .forEach(function (el) {
       el.addEventListener("input", update);

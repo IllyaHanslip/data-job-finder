@@ -32,6 +32,8 @@ TAG_SENIOR = "Senior"
 TAG_TEACHING = "Teaching"
 TAG_NEEDS_EXPERIENCE = "Needs experience"  # from the optional Claude check
 TAG_AI_TOOLS = "Uses AI tools"  # kept for asking for AI skills, though the title is elsewhere
+TAG_STRETCH = "Stretch"  # asks for 2-3 years, without a senior title: worth a try with projects
+STRETCH_YEARS = (2, 3)
 
 REASON_TOO_OLD = "older than the age limit"
 REASON_NOT_UK = "remote jobs not open to UK applicants"
@@ -98,6 +100,17 @@ _AI_SKILLS = re.compile(
     rf"|\b(?:ai|generative ai|genai) tools? (?:such as|like|including)\b"
     rf"|{_AI_FIRST}|\bai[\s\-](?:literate|savvy)\b|\bprompt (?:engineering|writing|design)\b"
     r"|\bai[\s\-]enabled (?:workflows?|ways of working)\b",
+    re.IGNORECASE,
+)
+# Years of experience an advert asks for: "2+ years of commercial SQL experience", "3-5 years'
+# experience", "minimum of two years' professional experience", "experience of 2 years".
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+                 "eight": 8, "nine": 9, "ten": 10}
+_N = r"(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)"
+_YEARS_ASKED = re.compile(
+    rf"\b{_N}\s*(?:\+|plus)?\s*(?:(?:-|–|to|or)\s*(?:\d{{1,2}}|[a-z]+)\s*\+?\s*)?years?['’]?\s+"
+    rf"(?:of\s+)?(?:[\w&/,\-]+\s+){{0,5}}?experience"
+    rf"|\bexperience\b[^.\n]{{0,40}}?\b{_N}\s*(?:\+|plus)?\s*(?:(?:-|–|to)\s*\d{{1,2}}\s*)?years?\b",
     re.IGNORECASE,
 )
 _NEGATED_BEFORE = re.compile(r"\b(?:no|not|without|never)\b(?:\s+[\w\-]+){0,2}\s*$", re.I)
@@ -283,6 +296,9 @@ def enrich(job: Job, rules: Rules, settings: Settings, today: date) -> None:
         )
         if present
     ]
+    job.years_asked = years_asked(job.description)
+    if is_stretch(job):
+        job.tags.append(TAG_STRETCH)
     job.matched_skills = rules.skills.matches(f"{job.title}\n{job.description}")
     job.score = _score(job, today)
 
@@ -297,8 +313,35 @@ def apply_claude_verdicts(jobs: list[Job], today: date) -> None:
         elif (job.claude_verdict == VERDICT_ENTRY and TAG_ENTRY not in job.tags
               and TAG_SENIOR not in job.tags):
             job.tags.insert(0, TAG_ENTRY)
+        job.tags = [tag for tag in job.tags if tag != TAG_STRETCH]  # the verdict may change it
+        if is_stretch(job):
+            job.tags.append(TAG_STRETCH)
         job.score = _score(job, today)
     jobs.sort(key=_sort_key)
+
+
+def years_asked(text: str) -> int | None:
+    """The fewest years of experience an advert's text asks for, or None if it names none."""
+    years = []
+    for match in _YEARS_ASKED.finditer(text):
+        word = (match.group(1) or match.group(2)).lower()
+        value = int(word) if word.isdigit() else _NUMBER_WORDS[word]
+        if 0 < value <= 15:  # "with over 30 years of experience" describes the company
+            years.append(value)
+    return min(years) if years else None
+
+
+def is_stretch(job: Job) -> bool:
+    """A job asking for 2-3 years whose title isn't senior: a stretch for a graduate.
+
+    Claude's verdict decides when there is one; otherwise the years named in the advert do.
+    """
+    if TAG_SENIOR in job.tags:
+        return False
+    if job.claude_verdict:
+        return (job.claude_verdict == VERDICT_NEEDS_EXPERIENCE
+                and job.claude_years in STRETCH_YEARS)
+    return job.years_asked in STRETCH_YEARS
 
 
 def choose_section(job: Job, radius_km: float) -> str:
@@ -404,6 +447,8 @@ def _score(job: Job, today: date) -> int:
         score -= 6
     if TAG_NEEDS_EXPERIENCE in job.tags:
         score -= 4
+    if TAG_STRETCH in job.tags:
+        score += 2  # within reach, so above jobs that want more experience
     return score
 
 

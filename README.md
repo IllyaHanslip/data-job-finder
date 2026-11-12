@@ -12,7 +12,7 @@ It never scrapes websites. Every request goes to a documented public API, answer
 
 Each run writes two files to `output/`:
 
-- **`jobs_YYYY-MM-DD.html`** opens in your browser. Each job card shows the title, employer, location, remote/hybrid/on-site, a rough distance and drive time, salary, posting date, a description (expandable to the full text), which of your CV skills it mentions, and a link to the original advert to apply. Jobs first seen today are marked **New**, and you can filter by keyword, new jobs only, entry-level only, or hide teaching roles and jobs you've applied for. Boxes you tick stay ticked in later reports. Click **Mark as applied** on a job once you've applied: it gets an **Applied** badge, and **My applications** at the top of the page lists every job you've marked, even after it drops out of the results, with a button to download the list as a spreadsheet. Your marks are stored by the browser: Chrome and Edge keep them from one day's report to the next, but clearing your browsing data deletes them. With [Claude's check](#optional-claudes-entry-level-check) on, each card also says whether the advert is really entry level, and a **Claude's review** box at the top can list the jobs most worth applying for.
+- **`jobs_YYYY-MM-DD.html`** opens in your browser. Each job card shows the title, employer, location, remote/hybrid/on-site, a rough distance and drive time, salary, posting date, a description (expandable to the full text), which of your CV skills it mentions, and a link to the original advert to apply. Jobs first seen today are marked **New**, and you can filter by keyword, new jobs only, entry-level or [stretch](#stretch-jobs) jobs only, or hide teaching roles and jobs you've applied for. Boxes you tick stay ticked in later reports. Click **Mark as applied** on a job once you've applied: it gets an **Applied** badge, and **My applications** at the top of the page lists every job you've marked, even after it drops out of the results, with a button to download the list as a spreadsheet. Your marks are stored by the browser: Chrome and Edge keep them from one day's report to the next, but clearing your browsing data deletes them. With [Claude's check](#optional-claudes-entry-level-check) on, each card also says whether the advert is really entry level, and a **Claude's review** box at the top can list the jobs most worth applying for.
 - **`jobs_YYYY-MM-DD.csv`** contains the same list for Excel or pandas.
 
 Jobs are grouped into three sections:
@@ -24,6 +24,10 @@ Jobs are grouped into three sections:
 Within each section, entry-level roles and adverts mentioning more of your CV skills are listed first.
 
 Jobs in other fields (operations, admin, marketing, finance and so on) are kept too when their advert asks the person to work with AI tools, even once: "experience using ChatGPT", "automate processes using AI", "an AI-first mindset". They carry a **Uses AI tools** badge, and two checkboxes show them on their own or hide them. Mentions that say nothing about the job don't count: a company describing its AI product ("our AI-native platform"), a privacy notice about AI, a developer's tool list, or "no prior experience in AI is required". Senior jobs stay out, as everywhere else. Turn this off with `keep_ai_tool_jobs = false` under `[filters]` in `config.toml`.
+
+### Stretch jobs
+
+A job asking for two or three years of experience, without a senior, lead or head title, gets a **Stretch** badge: with good projects to show, it can be worth applying anyway. The years come from Claude's check when the advert has been reviewed, and otherwise from the advert's text ("2+ years of experience", "three years' experience in SQL"). Tick **Stretch (2-3 yrs)** to show only these jobs, or tick it with **Entry level** to see both kinds together. While Stretch is ticked, **Hide needs experience** leaves stretch jobs showing.
 
 ## Sources, and how the tool stays within their rules
 

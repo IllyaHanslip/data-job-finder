@@ -14,7 +14,13 @@ import pytest
 
 from job_finder import cli, config
 from job_finder.config import DEFAULT_CONFIG_PATH, ConfigError, load_settings
-from job_finder.filters import TAG_AI_TOOLS, TAG_NEEDS_EXPERIENCE, FilterSummary, job_key
+from job_finder.filters import (
+    TAG_AI_TOOLS,
+    TAG_NEEDS_EXPERIENCE,
+    TAG_STRETCH,
+    FilterSummary,
+    job_key,
+)
 from job_finder.http_client import PoliteClient, Politeness
 from job_finder.models import (
     SCOPE_LOCAL,
@@ -173,6 +179,16 @@ def test_jobs_kept_for_ai_skills_get_a_badge_and_filters(settings):
     assert '<span class="badge ai">Uses AI tools</span>' in page
     assert 'data-ai-tools="1"' in page and 'data-ai-tools="0"' in page
     assert 'id="filter-ai-only"' in page and 'id="filter-ai-hide"' in page
+
+
+def test_stretch_jobs_get_a_badge_and_a_box_beside_entry_level(settings):
+    stretch = sample_job(title="Data Analyst", tags=[TAG_NEEDS_EXPERIENCE, TAG_STRETCH])
+    html_path, csv_path = write_reports([stretch], [], FilterSummary(), settings, NOW)
+    page = html_path.read_text(encoding="utf-8")
+    assert '<span class="badge stretch">Stretch</span>' in page and 'data-stretch="1"' in page
+    assert 'id="filter-entry"> Entry level</label>' in page and 'id="filter-stretch"' in page
+    with csv_path.open(encoding="utf-8-sig", newline="") as handle:
+        assert "Stretch" in next(csv.DictReader(handle))["Tags"]
 
 
 def test_card_links_every_site_a_job_was_found_on(settings):
